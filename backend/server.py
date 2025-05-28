@@ -919,14 +919,14 @@ async def get_follow_status(user_id: str, target_user_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/users/search")
-def search_users(q: str = ""):
+async def search_users(q: str = ""):
     """Search users by username or full name"""
     try:
         if not q or len(q) < 2:
             return []
         
         # Search by username or full name (case insensitive)
-        users = list(users_collection.find(
+        users_cursor = db.users.find(
             {
                 "$or": [
                     {"username": {"$regex": q, "$options": "i"}},
@@ -934,8 +934,9 @@ def search_users(q: str = ""):
                 ]
             },
             {"_id": 0, "password": 0, "email": 0}
-        ).limit(10))
+        ).limit(10)
         
+        users = await users_cursor.to_list(length=10)
         return users
         
     except Exception as e:
