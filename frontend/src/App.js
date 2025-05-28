@@ -2095,7 +2095,7 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
 
         {activeTab === 'followers' && (
           <div className="space-y-3">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Followers ({followers.length})</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Friends ({followers.length})</h2>
             
             {followers.length === 0 ? (
               <div className="text-center py-8">
