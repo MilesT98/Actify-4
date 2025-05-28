@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,10 +7,11 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime
-
+from datetime import datetime, timedelta
+import hashlib
+import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,42 +21,754 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+# Collections
+users_collection = db.users
+follows_collection = db.follows
+notifications_collection = db.notifications
+global_challenges_collection = db.global_challenges
+global_submissions_collection = db.global_submissions
+global_votes_collection = db.global_votes
+
+# Create the main app
+app = FastAPI(title="ACTIFY API", version="1.0.0")
+
+# NEW: Follow model
+class Follow(BaseModel):
+    follower_id: str
+    following_id: str
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Pydantic Models
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+    full_name: str
 
-# Define Models
-class StatusCheck(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+class GlobalChallenge(BaseModel):
+    id: str
+    prompt: str
+    created_at: datetime
+    expires_at: datetime
+    promptness_window_minutes: int
+    is_active: bool
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class GlobalSubmission(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    challenge_id: str
+    challenge_prompt: str
+    description: str
+    photo_data: Optional[str]
+    created_at: datetime
+    votes: int = 0
+    comments: List[Dict[str, Any]] = []
+    reactions: Dict[str, int] = {}
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+    full_name: str
+    created_at: datetime
+    avatar_color: str
+    groups: List[str] = []
+    achievements: List[str] = []
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+class GroupCreate(BaseModel):
+    name: str
+    description: str
+    category: str = "fitness"
+    is_public: bool = True
+
+class GroupResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    category: str
+    is_public: bool
+    created_by: str
+    created_at: datetime
+    members: List[str] = []
+    member_count: int = 0
+    current_challenge: Optional[str] = None
+
+class JoinGroupRequest(BaseModel):
+    group_id: str
+
+class ActivitySubmission(BaseModel):
+    group_id: str
+    challenge_type: str
+    description: str
+    photo_data: Optional[str] = None
+
+class SubmissionResponse(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    group_id: str
+    challenge_type: str
+    description: str
+    photo_data: Optional[str]
+    created_at: datetime
+    votes: int = 0
+    reactions: Dict[str, int] = {}
+
+class NotificationResponse(BaseModel):
+    id: str
+    user_id: str
+    type: str
+    title: str
+    message: str
+    data: Dict[str, Any] = {}
+    read: bool = False
+    created_at: datetime
+
+class Achievement(BaseModel):
+    id: str
+    name: str
+    description: str
+    icon: str
+    unlocked_at: datetime
+
+# Utility functions
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def generate_avatar_color() -> str:
+    colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FCEA2B", "#FF9F43", "#6C5CE7", "#FD79A8"]
+    return colors[len(colors) % 8]
+
+async def create_notification(user_id: str, notification_type: str, title: str, message: str, data: Dict = None):
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "type": notification_type,
+        "title": title,
+        "message": message,
+        "data": data or {},
+        "read": False,
+        "created_at": datetime.utcnow()
+    }
+    await db.notifications.insert_one(notification)
+
+# API Routes
+
+@api_router.get("/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.utcnow()}
+
+# User Authentication Routes
+@api_router.post("/users", response_model=UserResponse)
+async def create_user(user_data: UserCreate):
+    # Check if user exists
+    existing = await db.users.find_one({"$or": [{"username": user_data.username}, {"email": user_data.email}]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username or email already exists")
+    
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "username": user_data.username,
+        "email": user_data.email,
+        "password": hash_password(user_data.password),
+        "full_name": user_data.full_name,
+        "created_at": datetime.utcnow(),
+        "avatar_color": generate_avatar_color(),
+        "groups": [],
+        "achievements": [],
+        "stats": {
+            "total_activities": 0,
+            "current_streak": 0,
+            "total_groups_joined": 0
+        }
+    }
+    
+    await db.users.insert_one(user_doc)
+    
+    # Create welcome notification
+    await create_notification(
+        user_id, 
+        "welcome", 
+        "Welcome to ACTIFY!", 
+        f"Hey {user_data.full_name}! Ready to start your fitness journey?"
+    )
+    
+    return UserResponse(**user_doc)
+
+@api_router.post("/login")
+async def login(login_data: LoginRequest):
+    user = await db.users.find_one({"username": login_data.username})
+    if not user or user["password"] != hash_password(login_data.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Create session
+    session_id = str(uuid.uuid4())
+    session_doc = {
+        "session_id": session_id,
+        "user_id": user["id"],
+        "created_at": datetime.utcnow(),
+        "expires_at": datetime.utcnow() + timedelta(days=30)
+    }
+    await db.sessions.insert_one(session_doc)
+    
+    return {
+        "session_id": session_id,
+        "user": UserResponse(**user),
+        "message": "Login successful"
+    }
+
+@api_router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: str):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserResponse(**user)
+
+# Group Management Routes
+@api_router.post("/groups", response_model=GroupResponse)
+async def create_group(
+    name: str = Form(...),
+    description: str = Form(...),
+    category: str = Form(...),
+    is_public: str = Form(...),
+    user_id: str = Form(...)
+):
+    group_id = str(uuid.uuid4())
+    is_public_bool = is_public.lower() == 'true'
+    group_doc = {
+        "id": group_id,
+        "name": name,
+        "description": description,
+        "category": category,
+        "is_public": is_public_bool,
+        "created_by": user_id,
+        "created_at": datetime.utcnow(),
+        "members": [user_id],
+        "member_count": 1,
+        "current_challenge": "Daily Steps Challenge"
+    }
+    
+    await db.groups.insert_one(group_doc)
+    
+    # Add group to user's groups
+    await db.users.update_one(
+        {"id": user_id},
+        {"$push": {"groups": group_id}, "$inc": {"stats.total_groups_joined": 1}}
+    )
+    
+    return GroupResponse(**group_doc)
+
+@api_router.get("/groups", response_model=List[GroupResponse])
+async def get_groups(limit: int = 20):
+    groups = await db.groups.find({"is_public": True}).limit(limit).to_list(length=None)
+    return [GroupResponse(**group) for group in groups]
+
+@api_router.get("/groups/{group_id}", response_model=GroupResponse)
+async def get_group(group_id: str):
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return GroupResponse(**group)
+
+@api_router.post("/groups/{group_id}/join")
+async def join_group(group_id: str, user_id: str = Form(...)):
+    # Check if group exists
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Check if user already in group
+    if user_id in group.get("members", []):
+        raise HTTPException(status_code=400, detail="Already a member of this group")
+    
+    # Add user to group
+    await db.groups.update_one(
+        {"id": group_id},
+        {"$push": {"members": user_id}, "$inc": {"member_count": 1}}
+    )
+    
+    # Add group to user's groups
+    await db.users.update_one(
+        {"id": user_id},
+        {"$push": {"groups": group_id}, "$inc": {"stats.total_groups_joined": 1}}
+    )
+    
+    # Get user info for notification
+    user = await db.users.find_one({"id": user_id})
+    
+    # Notify all group members (except the new member)
+    for member_id in group["members"]:
+        if member_id != user_id:
+            await create_notification(
+                member_id,
+                "group_join",
+                "New Group Member!",
+                f"{user['username']} joined {group['name']}",
+                {"group_id": group_id, "new_member_id": user_id}
+            )
+    
+    return {"message": "Successfully joined group", "group_id": group_id}
+
+# Activity Submission Routes
+@api_router.post("/submissions", response_model=SubmissionResponse)
+async def create_submission(
+    group_id: str = Form(...),
+    challenge_type: str = Form(...),
+    description: str = Form(...),
+    user_id: str = Form(...),
+    photo: Optional[UploadFile] = File(None)
+):
+    # Verify user is member of group
+    group = await db.groups.find_one({"id": group_id})
+    if not group or user_id not in group.get("members", []):
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    
+    # Process photo if provided
+    photo_data = None
+    if photo:
+        content = await photo.read()
+        photo_data = base64.b64encode(content).decode('utf-8')
+    
+    # Get user info
+    user = await db.users.find_one({"id": user_id})
+    
+    submission_id = str(uuid.uuid4())
+    submission_doc = {
+        "id": submission_id,
+        "user_id": user_id,
+        "username": user["username"],
+        "group_id": group_id,
+        "challenge_type": challenge_type,
+        "description": description,
+        "photo_data": photo_data,
+        "created_at": datetime.utcnow(),
+        "votes": 0,
+        "reactions": {}
+    }
+    
+    await db.submissions.insert_one(submission_doc)
+    
+    # Update user stats
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"stats.total_activities": 1, "stats.current_streak": 1}}
+    )
+    
+    # Notify group members
+    for member_id in group["members"]:
+        if member_id != user_id:
+            await create_notification(
+                member_id,
+                "new_activity",
+                "New Activity Posted!",
+                f"{user['username']} completed the {challenge_type} challenge",
+                {"group_id": group_id, "submission_id": submission_id}
+            )
+    
+    return SubmissionResponse(**submission_doc)
+
+@api_router.get("/groups/{group_id}/submissions", response_model=List[SubmissionResponse])
+async def get_group_submissions(group_id: str, limit: int = 20):
+    submissions = await db.submissions.find({"group_id": group_id}).sort("created_at", -1).limit(limit).to_list(length=None)
+    return [SubmissionResponse(**submission) for submission in submissions]
+
+@api_router.get("/submissions/feed", response_model=List[SubmissionResponse])
+async def get_activity_feed(user_id: str, limit: int = 50):
+    # Get user's groups
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_groups = user.get("groups", [])
+    if not user_groups:
+        return []
+    
+    # Get submissions from user's groups
+    submissions = await db.submissions.find(
+        {"group_id": {"$in": user_groups}}
+    ).sort("created_at", -1).limit(limit).to_list(length=None)
+    
+    return [SubmissionResponse(**submission) for submission in submissions]
+
+# Notification Routes
+@api_router.get("/notifications/{user_id}", response_model=List[NotificationResponse])
+async def get_notifications(user_id: str, limit: int = 50):
+    notifications = await db.notifications.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(limit).to_list(length=None)
+    
+    return [NotificationResponse(**notification) for notification in notifications]
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str):
+    result = await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"read": True}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    return {"message": "Notification marked as read"}
+
+# Rankings Routes
+@api_router.get("/rankings/weekly")
+async def get_weekly_rankings(limit: int = 10):
+    # Get submissions from last 7 days
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    
+    pipeline = [
+        {"$match": {"created_at": {"$gte": week_ago}}},
+        {"$group": {"_id": "$user_id", "count": {"$sum": 1}, "username": {"$first": "$username"}}},
+        {"$sort": {"count": -1}},
+        {"$limit": limit}
+    ]
+    
+    rankings = await db.submissions.aggregate(pipeline).to_list(length=None)
+    
+    result = []
+    for i, ranking in enumerate(rankings):
+        result.append({
+            "rank": i + 1,
+            "user_id": ranking["_id"],
+            "username": ranking["username"],
+            "activity_count": ranking["count"],
+            "period": "weekly"
+        })
+    
+    return result
+
+@api_router.get("/rankings/alltime")
+async def get_alltime_rankings(limit: int = 10):
+    pipeline = [
+        {"$group": {"_id": "$user_id", "count": {"$sum": 1}, "username": {"$first": "$username"}}},
+        {"$sort": {"count": -1}},
+        {"$limit": limit}
+    ]
+    
+    rankings = await db.submissions.aggregate(pipeline).to_list(length=None)
+    
+    result = []
+    for i, ranking in enumerate(rankings):
+        result.append({
+            "rank": i + 1,
+            "user_id": ranking["_id"],
+            "username": ranking["username"],
+            "activity_count": ranking["count"],
+            "period": "all-time"
+        })
+    
+    return result
+
+# Global Challenge Routes
+@api_router.get("/global-challenges/current")
+async def get_current_global_challenge():
+    # Get the most recent active global challenge
+    challenge = await db.global_challenges.find_one(
+        {"is_active": True}, 
+        sort=[("created_at", -1)]
+    )
+    
+    if not challenge:
+        return {"challenge": None, "status": "no_active_challenge"}
+    
+    now = datetime.utcnow()
+    promptness_expired = now > (challenge["created_at"] + timedelta(minutes=challenge["promptness_window_minutes"]))
+    
+    return {
+        "challenge": GlobalChallenge(**challenge),
+        "promptness_expired": promptness_expired,
+        "time_remaining": max(0, int((challenge["expires_at"] - now).total_seconds()))
+    }
+
+@api_router.post("/global-challenges")
+async def create_global_challenge(
+    prompt: str = Form(...),
+    promptness_window_minutes: int = Form(5),
+    duration_hours: int = Form(6)
+):
+    """Create a new global challenge (admin function)"""
+    challenge_id = str(uuid.uuid4())
+    now = datetime.utcnow()
+    
+    # Deactivate any existing challenges
+    await db.global_challenges.update_many(
+        {"is_active": True},
+        {"$set": {"is_active": False}}
+    )
+    
+    challenge_doc = {
+        "id": challenge_id,
+        "prompt": prompt,
+        "created_at": now,
+        "expires_at": now + timedelta(hours=duration_hours),
+        "promptness_window_minutes": promptness_window_minutes,
+        "is_active": True
+    }
+    
+    await db.global_challenges.insert_one(challenge_doc)
+    return GlobalChallenge(**challenge_doc)
+
+@api_router.post("/global-submissions")
+async def create_global_submission(
+    challenge_id: str = Form(...),
+    description: str = Form(...),
+    user_id: str = Form(...),
+    photo: Optional[UploadFile] = File(None)
+):
+    # Verify challenge exists and is active
+    challenge = await db.global_challenges.find_one({"id": challenge_id, "is_active": True})
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Challenge not found or expired")
+    
+    # Check if user already submitted for this challenge
+    existing = await db.global_submissions.find_one({
+        "challenge_id": challenge_id,
+        "user_id": user_id
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Already submitted for this challenge")
+    
+    # Process photo if provided
+    photo_data = None
+    if photo:
+        content = await photo.read()
+        photo_data = base64.b64encode(content).decode('utf-8')
+    
+    # Get user info
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    submission_id = str(uuid.uuid4())
+    submission_doc = {
+        "id": submission_id,
+        "user_id": user_id,
+        "username": user["username"],
+        "challenge_id": challenge_id,
+        "challenge_prompt": challenge["prompt"],
+        "description": description,
+        "photo_data": photo_data,
+        "created_at": datetime.utcnow(),
+        "votes": 0,
+        "comments": [],
+        "reactions": {}
+    }
+    
+    await db.global_submissions.insert_one(submission_doc)
+    
+    # Update user stats
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"stats.total_activities": 1, "stats.current_streak": 1}}
+    )
+    
+    return GlobalSubmission(**submission_doc)
+
+@api_router.get("/global-feed")
+async def get_global_feed(
+    user_id: str,
+    challenge_id: Optional[str] = None,
+    limit: int = 50,
+    friends_only: bool = False
+):
+    # Check if user has submitted for the current challenge
+    current_challenge = await db.global_challenges.find_one(
+        {"is_active": True}, 
+        sort=[("created_at", -1)]
+    )
+    
+    if not current_challenge:
+        return {"status": "no_active_challenge", "submissions": []}
+    
+    target_challenge_id = challenge_id or current_challenge["id"]
+    
+    # Check if user has submitted for this challenge
+    user_submission = await db.global_submissions.find_one({
+        "challenge_id": target_challenge_id,
+        "user_id": user_id
+    })
+    
+    if not user_submission:
+        return {
+            "status": "locked", 
+            "challenge": GlobalChallenge(**current_challenge),
+            "message": "Complete today's Global Challenge to unlock the feed!"
+        }
+    
+    # Build query for submissions
+    submissions_query = {"challenge_id": target_challenge_id}
+    
+    # If friends_only is enabled, filter to include only user's submissions and followed users' submissions
+    if friends_only:
+        # Get list of users the current user is following
+        following_docs = await db.follows.find({"follower_id": user_id}).to_list(None)
+        following_ids = [follow["following_id"] for follow in following_docs]
+        
+        # Include current user's own submissions and submissions from followed users
+        following_ids.append(user_id)  # Include user's own submissions
+        submissions_query["user_id"] = {"$in": following_ids}
+    
+    # Get submissions for this challenge
+    submissions = await db.global_submissions.find(
+        submissions_query
+    ).sort("created_at", -1).limit(limit).to_list(length=None)
+    
+    # Get total participation count (always global, not filtered by friends)
+    total_participants = await db.global_submissions.count_documents(
+        {"challenge_id": target_challenge_id}
+    )
+    
+    # Get friends participation count if friends_only is enabled
+    friends_participants = 0
+    if friends_only:
+        friends_participants = await db.global_submissions.count_documents(
+            submissions_query
+        )
+    
+    return {
+        "status": "unlocked",
+        "challenge": GlobalChallenge(**current_challenge),
+        "submissions": [GlobalSubmission(**sub) for sub in submissions],
+        "total_participants": total_participants,
+        "friends_participants": friends_participants if friends_only else total_participants,
+        "user_submitted": True,
+        "friends_only": friends_only
+    }
+
+@api_router.post("/global-submissions/{submission_id}/vote")
+async def vote_global_submission(submission_id: str, user_id: str = Form(...)):
+    # Check if submission exists
+    submission = await db.global_submissions.find_one({"id": submission_id})
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    # Prevent self-voting
+    if submission["user_id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot vote on your own submission")
+    
+    # Check if user already voted (stored in separate votes collection)
+    existing_vote = await db.global_votes.find_one({
+        "submission_id": submission_id,
+        "user_id": user_id
+    })
+    
+    if existing_vote:
+        # Remove vote
+        await db.global_votes.delete_one({"_id": existing_vote["_id"]})
+        await db.global_submissions.update_one(
+            {"id": submission_id},
+            {"$inc": {"votes": -1}}
+        )
+        return {"voted": False, "votes": submission["votes"] - 1}
+    else:
+        # Add vote
+        vote_doc = {
+            "id": str(uuid.uuid4()),
+            "submission_id": submission_id,
+            "user_id": user_id,
+            "created_at": datetime.utcnow()
+        }
+        await db.global_votes.insert_one(vote_doc)
+        await db.global_submissions.update_one(
+            {"id": submission_id},
+            {"$inc": {"votes": 1}}
+        )
+        return {"voted": True, "votes": submission["votes"] + 1}
+
+@api_router.post("/global-submissions/{submission_id}/comment")
+async def comment_global_submission(
+    submission_id: str, 
+    comment: str = Form(...),
+    user_id: str = Form(...)
+):
+    # Check if submission exists
+    submission = await db.global_submissions.find_one({"id": submission_id})
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    # Get user info
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    comment_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "username": user["username"],
+        "comment": comment,
+        "created_at": datetime.utcnow()
+    }
+    
+    # Add comment to submission
+    await db.global_submissions.update_one(
+        {"id": submission_id},
+        {"$push": {"comments": comment_doc}}
+    )
+    
+    return {"message": "Comment added successfully", "comment": comment_doc}
+
+# Achievement Routes
+@api_router.get("/achievements/{user_id}", response_model=List[Achievement])
+async def get_user_achievements(user_id: str):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Calculate achievements based on user stats
+    achievements = []
+    stats = user.get("stats", {})
+    
+    if stats.get("total_activities", 0) >= 1:
+        achievements.append({
+            "id": "first_activity",
+            "name": "First Step",
+            "description": "Completed your first activity",
+            "icon": "🎯",
+            "unlocked_at": datetime.utcnow()
+        })
+    
+    if stats.get("total_activities", 0) >= 10:
+        achievements.append({
+            "id": "activity_master",
+            "name": "Activity Master",
+            "description": "Completed 10 activities",
+            "icon": "🏆",
+            "unlocked_at": datetime.utcnow()
+        })
+    
+    if stats.get("total_groups_joined", 0) >= 1:
+        achievements.append({
+            "id": "team_player",
+            "name": "Team Player",
+            "description": "Joined your first group",
+            "icon": "🤝",
+            "unlocked_at": datetime.utcnow()
+        })
+    
+    if stats.get("current_streak", 0) >= 7:
+        achievements.append({
+            "id": "week_warrior",
+            "name": "Week Warrior",
+            "description": "7 day activity streak",
+            "icon": "🔥",
+            "unlocked_at": datetime.utcnow()
+        })
+    
+    return achievements
 
 # Include the router in the main app
 app.include_router(api_router)
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -73,3 +787,439 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# NEW: Follow/Unfollow Endpoints
+@app.post("/api/users/{user_id}/follow")
+async def follow_user(
+    user_id: str,
+    follower_id: str = Form(...),
+):
+    """Follow a user"""
+    try:
+        # Check if users exist
+        user = await users_collection.find_one({"id": user_id})
+        follower = await users_collection.find_one({"id": follower_id})
+        
+        if not user or not follower:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user_id == follower_id:
+            raise HTTPException(status_code=400, detail="Cannot follow yourself")
+        
+        # Check if already following
+        existing_follow = await follows_collection.find_one({
+            "follower_id": follower_id,
+            "following_id": user_id
+        })
+        
+        if existing_follow:
+            raise HTTPException(status_code=400, detail="Already following this user")
+        
+        # Create follow relationship
+        follow_data = {
+            "id": str(uuid.uuid4()),
+            "follower_id": follower_id,
+            "following_id": user_id,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        await follows_collection.insert_one(follow_data)
+        
+        # Create notification for the followed user
+        notification_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "new_follower",
+            "message": f"{follower['username']} started following you!",
+            "read": False,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        await notifications_collection.insert_one(notification_data)
+        
+        return {"success": True, "message": "Successfully followed user"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/users/{user_id}/unfollow")
+async def unfollow_user(
+    user_id: str,
+    follower_id: str = Form(...),
+):
+    """Unfollow a user"""
+    try:
+        # Remove follow relationship
+        result = await follows_collection.delete_one({
+            "follower_id": follower_id,
+            "following_id": user_id
+        })
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Follow relationship not found")
+        
+        return {"success": True, "message": "Successfully unfollowed user"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/users/{user_id}/following")
+async def get_following(user_id: str):
+    """Get list of users that user_id is following"""
+    try:
+        follows = await follows_collection.find({"follower_id": user_id}).to_list(None)
+        following_ids = [follow["following_id"] for follow in follows]
+        
+        if not following_ids:
+            return []
+        
+        # Get user details for each followed user
+        following_users = await users_collection.find(
+            {"id": {"$in": following_ids}},
+            {"_id": 0, "password": 0, "email": 0}
+        ).to_list(None)
+        
+        return following_users
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/users/{user_id}/followers")
+async def get_followers(user_id: str):
+    """Get list of users following user_id"""
+    try:
+        follows = await follows_collection.find({"following_id": user_id}).to_list(None)
+        follower_ids = [follow["follower_id"] for follow in follows]
+        
+        if not follower_ids:
+            return []
+        
+        # Get user details for each follower
+        followers = await users_collection.find(
+            {"id": {"$in": follower_ids}},
+            {"_id": 0, "password": 0, "email": 0}
+        ).to_list(None)
+        
+        return followers
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/users/{user_id}/follow-status/{target_user_id}")
+async def get_follow_status(user_id: str, target_user_id: str):
+    """Check if user_id is following target_user_id"""
+    try:
+        follow = await follows_collection.find_one({
+            "follower_id": user_id,
+            "following_id": target_user_id
+        })
+        
+        return {"is_following": follow is not None}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/users/search")
+def search_users(q: str = ""):
+    """Search users by username or full name"""
+    try:
+        if not q or len(q) < 2:
+            return []
+        
+        # Search by username or full name (case insensitive)
+        users = list(users_collection.find(
+            {
+                "$or": [
+                    {"username": {"$regex": q, "$options": "i"}},
+                    {"full_name": {"$regex": q, "$options": "i"}}
+                ]
+            },
+            {"_id": 0, "password": 0, "email": 0}
+        ).limit(10))
+        
+        return users
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/global-challenges")
+async def create_scheduled_challenge(
+    prompt: str = Form(...),
+    start_time: Optional[str] = Form(None),  # ISO format datetime
+    promptness_window_minutes: int = Form(5),
+    duration_hours: int = Form(6),
+    send_notifications: bool = Form(True)  # Whether to send notifications to users
+):
+    """Create a global challenge (admin function)"""
+    try:
+        challenge_id = str(uuid.uuid4())
+        now = datetime.now()
+        
+        # Parse start time or use now
+        if start_time:
+            start_datetime = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+        else:
+            start_datetime = now
+            
+        # Calculate expiration time
+        expires_at = start_datetime + timedelta(hours=duration_hours)
+        
+        challenge_data = {
+            "id": challenge_id,
+            "prompt": prompt,
+            "created_at": start_datetime.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "promptness_window_minutes": promptness_window_minutes,
+            "is_active": start_datetime <= now <= expires_at
+        }
+        
+        global_challenges_collection.insert_one(challenge_data)
+        
+        # Deactivate any other active challenges
+        if challenge_data["is_active"]:
+            global_challenges_collection.update_many(
+                {"id": {"$ne": challenge_id}, "is_active": True},
+                {"$set": {"is_active": False}}
+            )
+        
+        # Send notifications to all users about the new global challenge
+        if send_notifications and challenge_data["is_active"]:
+            send_global_challenge_notifications(challenge_id, prompt)
+        
+        # Remove MongoDB ObjectId for JSON response
+        challenge_data.pop('_id', None)
+        
+        return {"success": True, "challenge": challenge_data, "message": "Challenge created successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def send_global_challenge_notifications(challenge_id: str, prompt: str):
+    """Send notifications to all users about a new global challenge"""
+    try:
+        # Get all active users (you might want to limit this or batch it for scale)
+        users = list(users_collection.find({}, {"id": 1, "username": 1}).limit(1000))
+        
+        notifications_to_insert = []
+        for user in users:
+            notification_data = {
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "type": "global_challenge_drop",
+                "challenge_id": challenge_id,  # Important for deep linking
+                "message": f"🌍 New Global Challenge: {prompt[:50]}{'...' if len(prompt) > 50 else ''}",
+                "title": "New Global Challenge!",
+                "read": False,
+                "created_at": datetime.now().isoformat(),
+                "action_url": "/feed",  # Deep link to home/today screen
+                "metadata": {
+                    "challenge_id": challenge_id,
+                    "challenge_prompt": prompt,
+                    "notification_category": "global_challenge"
+                }
+            }
+            notifications_to_insert.append(notification_data)
+        
+        # Batch insert notifications
+        if notifications_to_insert:
+            notifications_collection.insert_many(notifications_to_insert)
+            print(f"Sent {len(notifications_to_insert)} global challenge notifications")
+        
+    except Exception as e:
+        print(f"Failed to send global challenge notifications: {e}")
+
+# Enhanced notification endpoint with metadata
+@app.get("/api/notifications/{user_id}")
+def get_user_notifications(user_id: str, limit: int = 50):
+    """Get notifications for a user with enhanced metadata"""
+    try:
+        notifications = list(notifications_collection.find(
+            {"user_id": user_id}
+        ).sort("created_at", -1).limit(limit))
+        
+        # Remove MongoDB ObjectId
+        for notification in notifications:
+            notification.pop('_id', None)
+        
+        return notifications
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: str):
+    """Mark a notification as read"""
+    try:
+        result = notifications_collection.update_one(
+            {"id": notification_id},
+            {"$set": {"read": True, "read_at": datetime.now().isoformat()}}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        
+        return {"success": True, "message": "Notification marked as read"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/global-challenges")
+async def list_all_challenges():
+    """List all global challenges (admin function)"""
+    try:
+        challenges = list(global_challenges_collection.find({}, {"_id": 0}).sort("created_at", -1))
+        return challenges
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/global-challenges/{challenge_id}/activate")
+def activate_challenge(challenge_id: str):
+    """Manually activate a challenge (admin function)"""
+    try:
+        # Deactivate all other challenges
+        global_challenges_collection.update_many(
+            {"is_active": True},
+            {"$set": {"is_active": False}}
+        )
+        
+        # Activate the specified challenge
+        result = global_challenges_collection.update_one(
+            {"id": challenge_id},
+            {"$set": {"is_active": True}}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        
+        return {"success": True, "message": "Challenge activated"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/global-challenges/auto-schedule")
+def auto_schedule_challenges():
+    """Auto-schedule predefined challenges for the next week"""
+    try:
+        # Predefined challenge prompts
+        challenge_prompts = [
+            "Take a photo of your morning workout setup! 💪",
+            "Share a picture of your healthy meal today! 🥗",
+            "Show us your favorite exercise spot! 🏃‍♀️",
+            "Capture a moment of stretching or yoga! 🧘‍♀️",
+            "Photo of you staying hydrated! 💧",
+            "Share your post-workout feeling! 😊",
+            "Take a photo of something that motivates you to stay active! 🔥",
+            "Show us your workout gear! 👟",
+            "Capture yourself trying a new activity! 🆕",
+            "Photo of you enjoying movement outdoors! 🌳"
+        ]
+        
+        now = datetime.now()
+        created_challenges = []
+        
+        # Create challenges for the next 7 days (one per day)
+        for i in range(7):
+            start_time = now + timedelta(days=i, hours=6)  # Start at 6 AM each day
+            prompt = challenge_prompts[i % len(challenge_prompts)]
+            
+            challenge_id = str(uuid.uuid4())
+            expires_at = start_time + timedelta(hours=18)  # 18-hour duration
+            
+            challenge_data = {
+                "id": challenge_id,
+                "prompt": prompt,
+                "created_at": start_time.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "promptness_window_minutes": 5,
+                "is_active": False,  # Will be activated when the time comes
+                "auto_scheduled": True
+            }
+            
+            global_challenges_collection.insert_one(challenge_data)
+            created_challenges.append({k: v for k, v in challenge_data.items() if k != '_id'})  # Remove ObjectId
+        
+        return {
+            "success": True, 
+            "challenges_created": len(created_challenges),
+            "challenges": created_challenges,
+            "message": f"Successfully scheduled {len(created_challenges)} challenges"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/update-challenge-status")
+async def update_challenge_status():
+    """Update challenge status based on current time (called periodically)"""
+    try:
+        now = datetime.now()
+        now_iso = now.isoformat()
+        
+        # Deactivate expired challenges
+        expired_result = global_challenges_collection.update_many(
+            {
+                "is_active": True,
+                "expires_at": {"$lt": now_iso}
+            },
+            {"$set": {"is_active": False}}
+        )
+        
+        # Activate challenges that should start now
+        activated_result = global_challenges_collection.update_many(
+            {
+                "is_active": False,
+                "created_at": {"$lte": now_iso},
+                "expires_at": {"$gt": now_iso}
+            },
+            {"$set": {"is_active": True}}
+        )
+        
+        # Get current active challenge
+        active_challenge = global_challenges_collection.find_one({"is_active": True})
+        
+        return {
+            "success": True,
+            "expired_challenges": expired_result.modified_count,
+            "activated_challenges": activated_result.modified_count,
+            "current_active_challenge": active_challenge["prompt"] if active_challenge else None,
+            "timestamp": now_iso
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# NEW: Challenge Statistics Endpoint
+@app.get("/api/global-challenges/{challenge_id}/stats")
+async def get_challenge_stats(challenge_id: str):
+    """Get statistics for a specific challenge"""
+    try:
+        challenge = global_challenges_collection.find_one({"id": challenge_id})
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        
+        # Get submission stats
+        total_submissions = global_submissions_collection.count_documents({"challenge_id": challenge_id})
+        total_votes = global_votes_collection.count_documents({"submission_id": {"$in": [
+            sub["id"] for sub in global_submissions_collection.find({"challenge_id": challenge_id}, {"id": 1})
+        ]}})
+        
+        # Get top submissions
+        top_submissions = list(global_submissions_collection.find(
+            {"challenge_id": challenge_id}
+        ).sort("votes", -1).limit(3))
+        
+        return {
+            "challenge": challenge,
+            "stats": {
+                "total_submissions": total_submissions,
+                "total_votes": total_votes,
+                "participation_rate": f"{total_submissions} users participated",
+                "top_submissions": top_submissions
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
