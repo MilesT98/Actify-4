@@ -225,6 +225,30 @@ async def login(login_data: LoginRequest):
         "message": "Login successful"
     }
 
+@api_router.get("/users/search")
+async def search_users(q: str = ""):
+    """Search users by username or full name"""
+    try:
+        if not q or len(q) < 2:
+            return []
+        
+        # Search by username or full name (case insensitive)
+        users_cursor = db.users.find(
+            {
+                "$or": [
+                    {"username": {"$regex": q, "$options": "i"}},
+                    {"full_name": {"$regex": q, "$options": "i"}}
+                ]
+            },
+            {"_id": 0, "password": 0, "email": 0}
+        ).limit(10)
+        
+        users = await users_cursor.to_list(length=10)
+        return users
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str):
     user = await db.users.find_one({"id": user_id})
