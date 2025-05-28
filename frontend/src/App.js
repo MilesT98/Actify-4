@@ -71,7 +71,7 @@ const AuthScreen = ({ onLogin, darkMode }) => {
           }, 500); // Brief delay to show success message
           
         } else {
-          setError(response.data.message || 'Login failed. Please check your credentials.');
+          setError(response.data.message || response.data.detail || 'Login failed. Please check your credentials.');
         }
       } else {
         // SIGNUP FLOW
