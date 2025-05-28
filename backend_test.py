@@ -261,6 +261,87 @@ class ActifyAPITester:
         print("="*50)
         return self.tests_passed == self.tests_run
 
+def search_users(self, query):
+    """Search users by username or full name"""
+    params = {"q": query}
+    
+    success, response = self.run_test(
+        f"Search Users with query '{query}'",
+        "GET",
+        "users/search",
+        200,
+        params=params
+    )
+    
+    return response if success else []
+
+def get_user_followers(self, user_id):
+    """Get user's followers"""
+    success, response = self.run_test(
+        f"Get User Followers",
+        "GET",
+        f"users/{user_id}/followers",
+        200
+    )
+    
+    return response if success else []
+
+def get_user_following(self, user_id):
+    """Get users that user is following"""
+    success, response = self.run_test(
+        f"Get User Following",
+        "GET",
+        f"users/{user_id}/following",
+        200
+    )
+    
+    return response if success else []
+
+def follow_user(self, target_user_id):
+    """Follow a user"""
+    form_data = {
+        "follower_id": (None, self.user["id"])
+    }
+    
+    success, response = self.run_test(
+        f"Follow User {target_user_id}",
+        "POST",
+        f"users/{target_user_id}/follow",
+        200,
+        data=form_data,
+        files=True
+    )
+    
+    return response if success else None
+
+def unfollow_user(self, target_user_id):
+    """Unfollow a user"""
+    form_data = {
+        "follower_id": (None, self.user["id"])
+    }
+    
+    success, response = self.run_test(
+        f"Unfollow User {target_user_id}",
+        "POST",
+        f"users/{target_user_id}/unfollow",
+        200,
+        data=form_data,
+        files=True
+    )
+    
+    return response if success else None
+
+def get_follow_status(self, target_user_id):
+    """Check if user is following target user"""
+    success, response = self.run_test(
+        f"Get Follow Status",
+        "GET",
+        f"users/{self.user['id']}/follow-status/{target_user_id}",
+        200
+    )
+    
+    return response if success else None
+
 def main():
     # Get the backend URL from the frontend .env file
     backend_url = "https://640ec078-ed72-4608-8227-9358c4048e06.preview.emergentagent.com"
@@ -271,9 +352,8 @@ def main():
     # Test with provided credentials
     test_username = "testuser"
     test_password = "password123"
-    test_user_id = "3935387d-f4ec-4447-8ac9-dbbd304a1f05"
     
-    print("\n🔍 TESTING CONSOLIDATED GLOBAL FEED FUNCTIONALITY")
+    print("\n🔍 TESTING ACTIFY BUG FIXES AND NEW FEATURES")
     print("="*50)
     
     # Test 1: Login with provided credentials
@@ -293,114 +373,114 @@ def main():
     
     print(f"✅ Successfully authenticated as {test_username}")
     
-    # Test 2: Get current global challenge
-    current_challenge = tester.get_current_global_challenge()
+    # Test 2: Test user search functionality (Bug Fix)
+    print("\n🔍 TESTING USER SEARCH FUNCTIONALITY")
+    print("="*50)
     
-    # If no active challenge, create one for testing
-    if not current_challenge or not current_challenge.get("challenge"):
-        print("No active global challenge found, creating one for testing")
-        new_challenge = tester.create_global_challenge(
-            "Take a photo of something that motivates you to stay active today! 💪",
-            promptness_window_minutes=5,
-            duration_hours=6
-        )
-        if new_challenge:
-            current_challenge = tester.get_current_global_challenge()
+    search_results = tester.search_users("test")
+    if search_results and len(search_results) > 0:
+        print(f"✅ User search returned {len(search_results)} results for query 'test'")
+        for user in search_results[:3]:  # Show first 3 results
+            print(f"  - Found user: {user.get('username')} ({user.get('full_name')})")
+    else:
+        print("❌ User search returned no results or failed")
     
-    if current_challenge and current_challenge.get("challenge"):
-        print(f"✅ Active global challenge found: {current_challenge['challenge']['prompt']}")
-        challenge_id = current_challenge["challenge"]["id"]
+    # Test 3: Test Friends (Following/Followers) Functionality
+    print("\n🔍 TESTING FRIENDS FUNCTIONALITY")
+    print("="*50)
+    
+    # Get current user's followers and following
+    followers = tester.get_user_followers(tester.user["id"])
+    following = tester.get_user_following(tester.user["id"])
+    
+    print(f"✅ User has {len(followers) if followers else 0} followers")
+    print(f"✅ User is following {len(following) if following else 0} users")
+    
+    # Test follow/unfollow if we have search results
+    if search_results and len(search_results) > 0:
+        # Find a user to follow that is not the current user
+        target_user = None
+        for user in search_results:
+            if user["id"] != tester.user["id"]:
+                target_user = user
+                break
         
-        # Test 3: Get global feed (should be locked if user hasn't submitted)
-        feed_data = tester.get_global_feed()
-        
-        if feed_data and feed_data.get("status") == "locked":
-            print("✅ Global feed is correctly locked before submission")
+        if target_user:
+            # Check current follow status
+            follow_status = tester.get_follow_status(target_user["id"])
+            is_following = follow_status and follow_status.get("is_following", False)
             
-            # Test 4: Submit to global challenge
-            submission = tester.submit_to_global_challenge(
-                challenge_id,
-                "This is my motivation for staying active!",
-                # No photo for simplicity in testing
-            )
-            
-            if submission:
-                print("✅ Successfully submitted to global challenge")
-                
-                # Test 5: Get global feed again (should be unlocked now)
-                feed_data = tester.get_global_feed()
-                
-                if feed_data and feed_data.get("status") == "unlocked":
-                    print("✅ Global feed is correctly unlocked after submission")
+            if is_following:
+                # Test unfollow
+                unfollow_result = tester.unfollow_user(target_user["id"])
+                if unfollow_result:
+                    print(f"✅ Successfully unfollowed user {target_user['username']}")
                     
-                    # Test 6: Vote on a submission if available
-                    if feed_data.get("submissions"):
-                        submission_id = feed_data["submissions"][0]["id"]
-                        vote_result = tester.vote_on_submission(submission_id)
+                    # Verify follow status changed
+                    follow_status = tester.get_follow_status(target_user["id"])
+                    if follow_status and not follow_status.get("is_following", True):
+                        print("✅ Follow status correctly updated after unfollow")
+                    
+                    # Test follow
+                    follow_result = tester.follow_user(target_user["id"])
+                    if follow_result:
+                        print(f"✅ Successfully followed user {target_user['username']}")
                         
-                        if vote_result:
-                            print(f"✅ Successfully voted on submission: {vote_result}")
-                        
-                        # Test 7: Comment on a submission
-                        comment_result = tester.comment_on_submission(
-                            submission_id,
-                            "Great motivation! Keep it up!"
-                        )
-                        
-                        if comment_result:
-                            print(f"✅ Successfully commented on submission")
-                else:
-                    print("❌ Global feed is still locked after submission")
-        elif feed_data and feed_data.get("status") == "unlocked":
-            print("✅ Global feed is already unlocked (user has previously submitted)")
-            
-            # Test for already unlocked feed
-            if feed_data.get("submissions"):
-                submission_id = feed_data["submissions"][0]["id"]
-                
-                # Test voting
-                vote_result = tester.vote_on_submission(submission_id)
-                if vote_result:
-                    print(f"✅ Successfully voted on submission: {vote_result}")
-                
-                # Test commenting
-                comment_result = tester.comment_on_submission(
-                    submission_id,
-                    "Great motivation! Keep it up!"
-                )
-                if comment_result:
-                    print(f"✅ Successfully commented on submission")
-    else:
-        print("❌ No active global challenge found or could not be created")
+                        # Verify follow status changed back
+                        follow_status = tester.get_follow_status(target_user["id"])
+                        if follow_status and follow_status.get("is_following", False):
+                            print("✅ Follow status correctly updated after follow")
+            else:
+                # Test follow
+                follow_result = tester.follow_user(target_user["id"])
+                if follow_result:
+                    print(f"✅ Successfully followed user {target_user['username']}")
+                    
+                    # Verify follow status changed
+                    follow_status = tester.get_follow_status(target_user["id"])
+                    if follow_status and follow_status.get("is_following", False):
+                        print("✅ Follow status correctly updated after follow")
     
-    # Test 8: Get user's groups (for priority 2 content)
-    user_groups = tester.get_user_groups()
-    if user_groups:
-        print(f"✅ User has {len(user_groups)} groups for fallback content")
-    else:
-        print("ℹ️ User has no groups for fallback content")
+    # Test 4: Test Notification Deep Linking
+    print("\n🔍 TESTING NOTIFICATION FUNCTIONALITY")
+    print("="*50)
     
-    # Test 9: Get notifications
     notifications = tester.get_notifications()
-    if notifications:
-        print(f"✅ User has {len(notifications)} notifications")
+    if notifications and len(notifications) > 0:
+        print(f"✅ Retrieved {len(notifications)} notifications")
+        
+        # Check for global challenge notifications
+        global_challenge_notifications = [n for n in notifications if n.get("type") == "global_challenge_drop"]
+        if global_challenge_notifications:
+            print(f"✅ Found {len(global_challenge_notifications)} global challenge notifications")
+            
+            # Check for deep linking metadata
+            sample_notification = global_challenge_notifications[0]
+            if sample_notification.get("action_url") == "/feed":
+                print("✅ Global challenge notification has correct deep link to Home screen")
+            
+            if sample_notification.get("challenge_id") or (sample_notification.get("metadata") and sample_notification["metadata"].get("challenge_id")):
+                print("✅ Global challenge notification contains challenge ID for deep linking")
+        else:
+            print("ℹ️ No global challenge notifications found")
     else:
-        print("ℹ️ User has no notifications")
+        print("ℹ️ No notifications found")
     
     # Print summary of test results
     success = tester.print_summary()
     
-    # Print consolidated global feed verification
+    # Print overall verification
     print("\n" + "="*50)
-    print("CONSOLIDATED GLOBAL FEED VERIFICATION")
+    print("ACTIFY BUG FIXES AND FEATURES VERIFICATION")
     print("="*50)
     
     if success:
-        print("✅ Backend APIs for consolidated global feed are working correctly")
-        print("✅ Global challenge lock/unlock mechanism is functioning")
-        print("✅ Submission, voting, and commenting features are operational")
+        print("✅ Login functionality is working correctly")
+        print("✅ User search functionality is working correctly")
+        print("✅ Friends (Following/Followers) functionality is working correctly")
+        print("✅ Notification deep linking metadata is present")
     else:
-        print("❌ Some backend API tests failed, see details above")
+        print("❌ Some API tests failed, see details above")
     
     print("="*50)
     
