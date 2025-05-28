@@ -261,86 +261,86 @@ class ActifyAPITester:
         print("="*50)
         return self.tests_passed == self.tests_run
 
-def search_users(self, query):
-    """Search users by username or full name"""
-    params = {"q": query}
-    
-    success, response = self.run_test(
-        f"Search Users with query '{query}'",
-        "GET",
-        "users/search",
-        200,
-        params=params
-    )
-    
-    return response if success else []
+    def search_users(self, query):
+        """Search users by username or full name"""
+        params = {"q": query}
+        
+        success, response = self.run_test(
+            f"Search Users with query '{query}'",
+            "GET",
+            "users/search",
+            200,
+            params=params
+        )
+        
+        return response if success else []
 
-def get_user_followers(self, user_id):
-    """Get user's followers"""
-    success, response = self.run_test(
-        f"Get User Followers",
-        "GET",
-        f"users/{user_id}/followers",
-        200
-    )
-    
-    return response if success else []
+    def get_user_followers(self, user_id):
+        """Get user's followers"""
+        success, response = self.run_test(
+            f"Get User Followers",
+            "GET",
+            f"users/{user_id}/followers",
+            200
+        )
+        
+        return response if success else []
 
-def get_user_following(self, user_id):
-    """Get users that user is following"""
-    success, response = self.run_test(
-        f"Get User Following",
-        "GET",
-        f"users/{user_id}/following",
-        200
-    )
-    
-    return response if success else []
+    def get_user_following(self, user_id):
+        """Get users that user is following"""
+        success, response = self.run_test(
+            f"Get User Following",
+            "GET",
+            f"users/{user_id}/following",
+            200
+        )
+        
+        return response if success else []
 
-def follow_user(self, target_user_id):
-    """Follow a user"""
-    form_data = {
-        "follower_id": (None, self.user["id"])
-    }
-    
-    success, response = self.run_test(
-        f"Follow User {target_user_id}",
-        "POST",
-        f"users/{target_user_id}/follow",
-        200,
-        data=form_data,
-        files=True
-    )
-    
-    return response if success else None
+    def follow_user(self, target_user_id):
+        """Follow a user"""
+        form_data = {
+            "follower_id": (None, self.user["id"])
+        }
+        
+        success, response = self.run_test(
+            f"Follow User {target_user_id}",
+            "POST",
+            f"users/{target_user_id}/follow",
+            200,
+            data=form_data,
+            files=True
+        )
+        
+        return response if success else None
 
-def unfollow_user(self, target_user_id):
-    """Unfollow a user"""
-    form_data = {
-        "follower_id": (None, self.user["id"])
-    }
-    
-    success, response = self.run_test(
-        f"Unfollow User {target_user_id}",
-        "POST",
-        f"users/{target_user_id}/unfollow",
-        200,
-        data=form_data,
-        files=True
-    )
-    
-    return response if success else None
+    def unfollow_user(self, target_user_id):
+        """Unfollow a user"""
+        form_data = {
+            "follower_id": (None, self.user["id"])
+        }
+        
+        success, response = self.run_test(
+            f"Unfollow User {target_user_id}",
+            "POST",
+            f"users/{target_user_id}/unfollow",
+            200,
+            data=form_data,
+            files=True
+        )
+        
+        return response if success else None
 
-def get_follow_status(self, target_user_id):
-    """Check if user is following target user"""
-    success, response = self.run_test(
-        f"Get Follow Status",
-        "GET",
-        f"users/{self.user['id']}/follow-status/{target_user_id}",
-        200
-    )
-    
-    return response if success else None
+    def get_follow_status(self, target_user_id):
+        """Check if user is following target user"""
+        success, response = self.run_test(
+            f"Get Follow Status",
+            "GET",
+            f"users/{self.user['id']}/follow-status/{target_user_id}",
+            200
+        )
+        
+        return response if success else None
 
 def main():
     # Get the backend URL from the frontend .env file
