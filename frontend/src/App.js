@@ -1973,7 +1973,7 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
                     <div className="text-xl font-bold text-purple-600 dark:text-purple-400">
                       {followers.length}
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Followers</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Friends</div>
                   </div>
                 </div>
               )}
