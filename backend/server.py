@@ -918,7 +918,7 @@ async def get_follow_status(user_id: str, target_user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/users/search")
+@api_router.get("/users/search")
 async def search_users(q: str = ""):
     """Search users by username or full name"""
     try:
