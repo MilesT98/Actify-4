@@ -53,7 +53,7 @@ const AuthScreen = ({ onLogin, darkMode }) => {
           password: formData.password
         });
         
-        if (response.data.success) {
+        if (response.data.message === "Login successful") {
           // Secure token storage
           const { user, session_id } = response.data;
           
