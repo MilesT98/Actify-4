@@ -942,30 +942,6 @@ async def get_follow_status(user_id: str, target_user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.get("/users/search")
-async def search_users(q: str = ""):
-    """Search users by username or full name"""
-    try:
-        if not q or len(q) < 2:
-            return []
-        
-        # Search by username or full name (case insensitive)
-        users_cursor = db.users.find(
-            {
-                "$or": [
-                    {"username": {"$regex": q, "$options": "i"}},
-                    {"full_name": {"$regex": q, "$options": "i"}}
-                ]
-            },
-            {"_id": 0, "password": 0, "email": 0}
-        ).limit(10)
-        
-        users = await users_cursor.to_list(length=10)
-        return users
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/api/admin/global-challenges")
 async def create_scheduled_challenge(
     prompt: str = Form(...),
