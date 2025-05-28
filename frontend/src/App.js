@@ -1911,7 +1911,7 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
                 : 'text-gray-600 dark:text-gray-300'
             }`}
           >
-            Followers
+            Friends
           </button>
           <button
             onClick={() => setActiveTab('discover')}
