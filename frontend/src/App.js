@@ -858,21 +858,42 @@ const GroupsScreen = ({ user, darkMode }) => {
       {showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create New Group</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create New Private Group</h2>
+            
+            {/* Success Message */}
+            {createGroupSuccess && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                {createGroupSuccess}
+              </div>
+            )}
+
+            {/* Error Message */}
+            {createGroupError && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {createGroupError}
+              </div>
+            )}
             
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Group Name
+                  Group Name *
                 </label>
                 <input
                   type="text"
                   value={newGroup.name}
-                  onChange={(e) => setNewGroup({...newGroup, name: e.target.value})}
+                  onChange={(e) => {
+                    setNewGroup({...newGroup, name: e.target.value});
+                    setCreateGroupError(''); // Clear error on input change
+                  }}
                   className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Enter group name"
+                  placeholder="Enter group name (3-50 characters)"
                   maxLength={50}
+                  disabled={createGroupLoading}
                 />
+                <div className="text-right text-xs text-gray-500 mt-1">
+                  {newGroup.name.length}/50
+                </div>
               </div>
               
               <div>
@@ -881,12 +902,25 @@ const GroupsScreen = ({ user, darkMode }) => {
                 </label>
                 <textarea
                   value={newGroup.description}
-                  onChange={(e) => setNewGroup({...newGroup, description: e.target.value})}
+                  onChange={(e) => {
+                    setNewGroup({...newGroup, description: e.target.value});
+                    setCreateGroupError('');
+                  }}
                   className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Describe your group"
+                  placeholder="Describe your group (max 200 characters)"
                   rows="3"
                   maxLength={200}
+                  disabled={createGroupLoading}
                 />
+                <div className="text-right text-xs text-gray-500 mt-1">
+                  {newGroup.description.length}/200
+                </div>
+              </div>
+              
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
+                <p className="text-sm text-purple-700 dark:text-purple-300">
+                  🔒 This will be a private group. Only invited members can see and participate in group activities.
+                </p>
               </div>
               
               <div className="flex space-x-3">
@@ -894,16 +928,27 @@ const GroupsScreen = ({ user, darkMode }) => {
                   onClick={() => {
                     setShowCreateForm(false);
                     setNewGroup({ name: '', description: '' });
+                    setCreateGroupError('');
+                    setCreateGroupSuccess('');
                   }}
-                  className="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                  className="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 disabled:opacity-50"
+                  disabled={createGroupLoading}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={createGroup}
-                  className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700"
+                  disabled={createGroupLoading || !newGroup.name.trim()}
+                  className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  Create
+                  {createGroupLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Group'
+                  )}
                 </button>
               </div>
             </div>
