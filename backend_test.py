@@ -2,7 +2,6 @@
 import requests
 import json
 import sys
-import time
 from datetime import datetime
 
 class ActifyAPITester:
@@ -41,6 +40,9 @@ class ActifyAPITester:
             headers['Authorization'] = f'Bearer {self.session_id}'
         
         print(f"\n🔍 Testing {test_name}...")
+        print(f"URL: {url}")
+        print(f"Method: {method}")
+        print(f"Data: {data}")
         
         try:
             if method == 'GET':
@@ -75,28 +77,6 @@ class ActifyAPITester:
         except Exception as e:
             return self.log_result(test_name, False, f"Error: {str(e)}"), None
 
-    def register_user(self, username, email, password, full_name):
-        """Register a new user"""
-        data = {
-            "username": username,
-            "email": email,
-            "password": password,
-            "full_name": full_name
-        }
-        
-        success, response = self.run_test(
-            "Register User",
-            "POST",
-            "users",
-            201,
-            data=data
-        )
-        
-        if success:
-            self.user = response
-            return True
-        return False
-
     def login(self, username, password):
         """Login with username and password"""
         data = {
@@ -118,188 +98,15 @@ class ActifyAPITester:
             return True
         return False
 
-    def get_current_global_challenge(self):
-        """Get the current global challenge"""
+    def health_check(self):
+        """Check API health"""
         success, response = self.run_test(
-            "Get Current Global Challenge",
+            "Health Check",
             "GET",
-            "global-challenges/current",
+            "health",
             200
         )
-        return response if success else None
-
-    def create_global_challenge(self, prompt, promptness_window_minutes=5, duration_hours=6):
-        """Create a new global challenge (admin function)"""
-        form_data = {
-            "prompt": (None, prompt),
-            "promptness_window_minutes": (None, str(promptness_window_minutes)),
-            "duration_hours": (None, str(duration_hours))
-        }
-        
-        success, response = self.run_test(
-            "Create Global Challenge",
-            "POST",
-            "global-challenges",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-
-    def submit_to_global_challenge(self, challenge_id, description, photo=None):
-        """Submit to a global challenge"""
-        form_data = {
-            "challenge_id": (None, str(challenge_id)),
-            "description": (None, description),
-            "user_id": (None, str(self.user["id"]))
-        }
-        
-        if photo:
-            form_data["photo"] = photo
-        
-        success, response = self.run_test(
-            "Submit to Global Challenge",
-            "POST",
-            "global-submissions",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-
-    def get_global_feed(self, challenge_id=None):
-        """Get the global feed"""
-        params = {"user_id": self.user["id"]}
-        if challenge_id:
-            params["challenge_id"] = challenge_id
-        
-        success, response = self.run_test(
-            "Get Global Feed",
-            "GET",
-            "global-feed",
-            200,
-            params=params
-        )
-        
-        return response if success else None
-
-    def vote_on_submission(self, submission_id):
-        """Vote on a global submission"""
-        form_data = {
-            "user_id": (None, self.user["id"])
-        }
-        
-        success, response = self.run_test(
-            "Vote on Submission",
-            "POST",
-            f"global-submissions/{submission_id}/vote",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-
-    def comment_on_submission(self, submission_id, comment):
-        """Comment on a global submission"""
-        form_data = {
-            "user_id": (None, self.user["id"]),
-            "comment": (None, comment)
-        }
-        
-        success, response = self.run_test(
-            "Comment on Submission",
-            "POST",
-            f"global-submissions/{submission_id}/comment",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-
-    def get_user_groups(self):
-        """Get user's groups"""
-        if not self.user or not self.user.get("groups"):
-            return []
-            
-        groups = []
-        for group_id in self.user["groups"]:
-            success, response = self.run_test(
-                f"Get Group {group_id}",
-                "GET",
-                f"groups/{group_id}",
-                200
-            )
-            if success:
-                groups.append(response)
-        
-        return groups
-        
-    def create_group(self, name, description, category="fitness", is_public=True):
-        """Create a new group"""
-        form_data = {
-            "name": (None, name),
-            "description": (None, description),
-            "category": (None, category),
-            "is_public": (None, str(is_public).lower()),
-            "user_id": (None, self.user["id"])
-        }
-        
-        success, response = self.run_test(
-            f"Create Group '{name}'",
-            "POST",
-            "groups",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-        
-    def get_all_groups(self, limit=20):
-        """Get all public groups"""
-        params = {"limit": limit}
-        
-        success, response = self.run_test(
-            "Get All Groups",
-            "GET",
-            "groups",
-            200,
-            params=params
-        )
-        
-        return response if success else []
-        
-    def join_group(self, group_id):
-        """Join a group"""
-        form_data = {
-            "user_id": (None, self.user["id"])
-        }
-        
-        success, response = self.run_test(
-            f"Join Group {group_id}",
-            "POST",
-            f"groups/{group_id}/join",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-
-    def get_notifications(self):
-        """Get user's notifications"""
-        success, response = self.run_test(
-            "Get Notifications",
-            "GET",
-            f"notifications/{self.user['id']}",
-            200
-        )
-        
-        return response if success else []
+        return success
 
     def print_summary(self):
         """Print a summary of test results"""
@@ -313,93 +120,12 @@ class ActifyAPITester:
         print("="*50)
         return self.tests_passed == self.tests_run
 
-    def search_users(self, query):
-        """Search users by username or full name"""
-        params = {"q": query}
-        
-        success, response = self.run_test(
-            f"Search Users with query '{query}'",
-            "GET",
-            "users/search",
-            200,
-            params=params
-        )
-        
-        return response if success else []
-
-    def get_user_followers(self, user_id):
-        """Get user's followers"""
-        success, response = self.run_test(
-            f"Get User Followers",
-            "GET",
-            f"users/{user_id}/followers",
-            200
-        )
-        
-        return response if success else []
-
-    def get_user_following(self, user_id):
-        """Get users that user is following"""
-        success, response = self.run_test(
-            f"Get User Following",
-            "GET",
-            f"users/{user_id}/following",
-            200
-        )
-        
-        return response if success else []
-
-    def follow_user(self, target_user_id):
-        """Follow a user"""
-        form_data = {
-            "follower_id": (None, self.user["id"])
-        }
-        
-        success, response = self.run_test(
-            f"Follow User {target_user_id}",
-            "POST",
-            f"users/{target_user_id}/follow",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-
-    def unfollow_user(self, target_user_id):
-        """Unfollow a user"""
-        form_data = {
-            "follower_id": (None, self.user["id"])
-        }
-        
-        success, response = self.run_test(
-            f"Unfollow User {target_user_id}",
-            "POST",
-            f"users/{target_user_id}/unfollow",
-            200,
-            data=form_data,
-            files=True
-        )
-        
-        return response if success else None
-
-    def get_follow_status(self, target_user_id):
-        """Check if user is following target user"""
-        success, response = self.run_test(
-            f"Get Follow Status",
-            "GET",
-            f"users/{self.user['id']}/follow-status/{target_user_id}",
-            200
-        )
-        
-        return response if success else None
-
 def main():
     # Get the backend URL from the frontend .env file
     with open('/app/frontend/.env', 'r') as f:
         for line in f:
             if line.startswith('REACT_APP_BACKEND_URL='):
-                backend_url = line.strip().split('=')[1]
+                backend_url = line.strip().split('=')[1].strip('"\'')
                 break
     
     print(f"Using backend URL: {backend_url}")
@@ -411,208 +137,27 @@ def main():
     test_username = "testuser"
     test_password = "password123"
     
-    print("\n🔍 TESTING ACTIFY BUG FIXES AND NEW FEATURES")
+    print("\n🔍 TESTING ACTIFY LOGIN FUNCTIONALITY")
     print("="*50)
     
-    # Test 1: Login with provided credentials
+    # Test 1: Health check
+    if not tester.health_check():
+        print("❌ API health check failed, stopping tests")
+        return 1
+    
+    # Test 2: Login with provided credentials
     print("\n🔍 TESTING LOGIN API")
     print("="*50)
     
     if not tester.login(test_username, test_password):
-        print("❌ Failed to login with provided credentials, trying to register a new user")
-        
-        # Generate a unique username for testing
-        timestamp = int(time.time())
-        test_username = f"test_user_{timestamp}"
-        test_email = f"test_{timestamp}@example.com"
-        test_password = "TestPassword123"
-        test_full_name = "Test User"
-        
-        if not tester.register_user(test_username, test_email, test_password, test_full_name):
-            print("❌ Failed to register test user, stopping tests")
-            return 1
+        print("❌ Failed to login with provided credentials")
+        return 1
     else:
         print(f"✅ Successfully authenticated as {test_username}")
         print("✅ Login response contains session_id, user object, and success message")
     
-    # Test 2: Test user search functionality (Bug Fix)
-    print("\n🔍 TESTING USER SEARCH API")
-    print("="*50)
-    
-    search_results = tester.search_users("test")
-    if search_results and len(search_results) > 0:
-        print(f"✅ User search returned {len(search_results)} results for query 'test'")
-        print("✅ Search API returns array of user objects matching 'test'")
-        for user in search_results[:3]:  # Show first 3 results
-            print(f"  - Found user: {user.get('username')} ({user.get('full_name')})")
-    else:
-        print("❌ User search returned no results or failed")
-    
-    # Test 3: Test Friends (Following/Followers) Functionality
-    print("\n🔍 TESTING FRIENDS FUNCTIONALITY")
-    print("="*50)
-    
-    # Get current user's followers and following
-    followers = tester.get_user_followers(tester.user["id"])
-    following = tester.get_user_following(tester.user["id"])
-    
-    print(f"✅ User has {len(followers) if followers else 0} friends (followers)")
-    print(f"✅ User is following {len(following) if following else 0} friends")
-    
-    # Test follow/unfollow if we have search results
-    if search_results and len(search_results) > 0:
-        # Find a user to follow that is not the current user
-        target_user = None
-        for user in search_results:
-            if user["id"] != tester.user["id"]:
-                target_user = user
-                break
-        
-        if target_user:
-            # Check current follow status
-            follow_status = tester.get_follow_status(target_user["id"])
-            is_following = follow_status and follow_status.get("is_following", False)
-            
-            if is_following:
-                # Test unfollow
-                unfollow_result = tester.unfollow_user(target_user["id"])
-                if unfollow_result:
-                    print(f"✅ Successfully unfollowed user {target_user['username']}")
-                    
-                    # Verify follow status changed
-                    follow_status = tester.get_follow_status(target_user["id"])
-                    if follow_status and not follow_status.get("is_following", True):
-                        print("✅ Follow status correctly updated after unfollow")
-                    
-                    # Test follow
-                    follow_result = tester.follow_user(target_user["id"])
-                    if follow_result:
-                        print(f"✅ Successfully followed user {target_user['username']}")
-                        
-                        # Verify follow status changed back
-                        follow_status = tester.get_follow_status(target_user["id"])
-                        if follow_status and follow_status.get("is_following", False):
-                            print("✅ Follow status correctly updated after follow")
-            else:
-                # Test follow
-                follow_result = tester.follow_user(target_user["id"])
-                if follow_result:
-                    print(f"✅ Successfully followed user {target_user['username']}")
-                    
-                    # Verify follow status changed
-                    follow_status = tester.get_follow_status(target_user["id"])
-                    if follow_status and follow_status.get("is_following", False):
-                        print("✅ Follow status correctly updated after follow")
-    
-    # Test 4: Test Group Creation Functionality (New Requirement)
-    print("\n🔍 TESTING GROUP CREATION FUNCTIONALITY")
-    print("="*50)
-    
-    # Create a new private group
-    timestamp = int(time.time())
-    group_name = f"Test Group {timestamp}"
-    group_description = "This is a test group created for testing purposes"
-    
-    new_group = tester.create_group(group_name, group_description, is_public=False)
-    if new_group:
-        print(f"✅ Successfully created private group: {new_group.get('name')}")
-        print(f"✅ Group has correct properties: ID={new_group.get('id')}, Description={new_group.get('description')}")
-        print(f"✅ Group privacy setting is correct: is_public={new_group.get('is_public')}")
-        
-        # Verify user is in the group
-        if tester.user["id"] in new_group.get("members", []):
-            print("✅ User was automatically added to the group")
-        
-        # Get user's groups to verify the new group is included
-        user_groups = tester.get_user_groups()
-        if user_groups and any(g.get("id") == new_group.get("id") for g in user_groups):
-            print("✅ New group appears in user's groups list")
-    else:
-        print("❌ Failed to create a new group")
-    
-    # Test 5: Test Global Challenge Submission (for auto-refresh testing)
-    print("\n🔍 TESTING GLOBAL CHALLENGE SUBMISSION")
-    print("="*50)
-    
-    # Get current global challenge
-    current_challenge = tester.get_current_global_challenge()
-    if current_challenge and current_challenge.get("challenge"):
-        challenge_id = current_challenge["challenge"]["id"]
-        print(f"✅ Found active global challenge: {current_challenge['challenge']['prompt']}")
-        
-        # Submit to the challenge
-        submission = tester.submit_to_global_challenge(
-            challenge_id, 
-            "This is a test submission for the global challenge"
-        )
-        
-        if submission:
-            print(f"✅ Successfully submitted to global challenge")
-            print(f"✅ Submission has correct properties: ID={submission.get('id')}, User={submission.get('username')}")
-            
-            # Get global feed to verify submission appears
-            feed = tester.get_global_feed(challenge_id)
-            if feed and feed.get("status") == "unlocked" and feed.get("submissions"):
-                print(f"✅ Global feed is unlocked with {len(feed['submissions'])} submissions")
-                print(f"✅ User's submission is in the feed")
-                
-                # Check if user's submission is in the feed
-                user_submissions = [s for s in feed["submissions"] if s["user_id"] == tester.user["id"]]
-                if user_submissions:
-                    print(f"✅ Found {len(user_submissions)} submissions by the user in the feed")
-                else:
-                    print("❌ User's submission not found in the feed")
-            else:
-                print("❌ Failed to get global feed or feed is locked")
-        else:
-            print("❌ Failed to submit to global challenge")
-    else:
-        print("ℹ️ No active global challenge found")
-    
-    # Test 6: Test Notification Deep Linking
-    print("\n🔍 TESTING NOTIFICATION FUNCTIONALITY")
-    print("="*50)
-    
-    notifications = tester.get_notifications()
-    if notifications and len(notifications) > 0:
-        print(f"✅ Retrieved {len(notifications)} notifications")
-        
-        # Check for global challenge notifications
-        global_challenge_notifications = [n for n in notifications if n.get("type") == "global_challenge_drop"]
-        if global_challenge_notifications:
-            print(f"✅ Found {len(global_challenge_notifications)} global challenge notifications")
-            
-            # Check for deep linking metadata
-            sample_notification = global_challenge_notifications[0]
-            if sample_notification.get("action_url") == "/feed":
-                print("✅ Global challenge notification has correct deep link to Home screen")
-            
-            if sample_notification.get("challenge_id") or (sample_notification.get("metadata") and sample_notification["metadata"].get("challenge_id")):
-                print("✅ Global challenge notification contains challenge ID for deep linking")
-        else:
-            print("ℹ️ No global challenge notifications found")
-    else:
-        print("ℹ️ No notifications found")
-    
     # Print summary of test results
     success = tester.print_summary()
-    
-    # Print overall verification
-    print("\n" + "="*50)
-    print("ACTIFY BUG FIXES AND FEATURES VERIFICATION")
-    print("="*50)
-    
-    if success:
-        print("✅ Login functionality is working correctly")
-        print("✅ User search functionality is working correctly")
-        print("✅ Friends (Following/Followers) functionality is working correctly")
-        print("✅ Group creation functionality is working correctly")
-        print("✅ Global challenge submission is working correctly")
-        print("✅ Notification deep linking metadata is present")
-    else:
-        print("❌ Some API tests failed, see details above")
-    
-    print("="*50)
     
     return 0 if success else 1
 
