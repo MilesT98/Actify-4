@@ -751,27 +751,62 @@ const GroupsScreen = ({ user, darkMode }) => {
   };
 
   const createGroup = async () => {
+    // Validation
     if (!newGroup.name.trim()) {
-      alert('Please enter a group name');
+      setCreateGroupError('Please enter a group name');
       return;
     }
+
+    if (newGroup.name.trim().length < 3) {
+      setCreateGroupError('Group name must be at least 3 characters long');
+      return;
+    }
+
+    if (newGroup.name.trim().length > 50) {
+      setCreateGroupError('Group name must be less than 50 characters');
+      return;
+    }
+
+    if (newGroup.description.trim().length > 200) {
+      setCreateGroupError('Description must be less than 200 characters');
+      return;
+    }
+
+    setCreateGroupLoading(true);
+    setCreateGroupError('');
 
     try {
       const response = await axios.post(`${API}/groups`, {
         name: newGroup.name.trim(),
         description: newGroup.description.trim(),
-        creator_id: user.id
+        creator_id: user.id,
+        is_private: true // Explicitly set as private
       });
 
       if (response.status === 201) {
-        alert('Group created successfully! 🎉');
+        setCreateGroupSuccess('Group created successfully! 🎉');
         setNewGroup({ name: '', description: '' });
-        setShowCreateForm(false);
-        await loadGroups(); // Refresh groups list
+        
+        // Delay closing form to show success message
+        setTimeout(() => {
+          setShowCreateForm(false);
+          setCreateGroupSuccess('');
+          loadGroups(); // Refresh groups list
+        }, 1500);
       }
     } catch (error) {
       console.error('Failed to create group:', error);
-      alert('Failed to create group. Please try again.');
+      if (error.response?.status === 409) {
+        setCreateGroupError('A group with this name already exists. Please choose a different name.');
+      } else if (error.response?.status === 400) {
+        setCreateGroupError(error.response.data?.detail || 'Invalid group data. Please check your inputs.');
+      } else if (error.response?.status >= 500) {
+        setCreateGroupError('Server error. Please try again later.');
+      } else {
+        setCreateGroupError('Failed to create group. Please check your connection and try again.');
+      }
+    } finally {
+      setCreateGroupLoading(false);
     }
   };
 
