@@ -779,11 +779,17 @@ const GroupsScreen = ({ user, darkMode }) => {
     setCreateGroupError('');
 
     try {
-      const response = await axios.post(`${API}/groups`, {
-        name: newGroup.name.trim(),
-        description: newGroup.description.trim(),
-        creator_id: user.id,
-        is_private: true // Explicitly set as private
+      const formData = new FormData();
+      formData.append('name', newGroup.name.trim());
+      formData.append('description', newGroup.description.trim());
+      formData.append('category', 'fitness'); // Default category
+      formData.append('is_public', 'false'); // Explicitly set as private
+      formData.append('user_id', user.id);
+
+      const response = await axios.post(`${API}/groups`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
 
       if (response.status === 201) {
