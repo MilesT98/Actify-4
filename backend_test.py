@@ -237,6 +237,58 @@ class ActifyAPITester:
                 groups.append(response)
         
         return groups
+        
+    def create_group(self, name, description, category="fitness", is_public=True):
+        """Create a new group"""
+        form_data = {
+            "name": (None, name),
+            "description": (None, description),
+            "category": (None, category),
+            "is_public": (None, str(is_public).lower()),
+            "user_id": (None, self.user["id"])
+        }
+        
+        success, response = self.run_test(
+            f"Create Group '{name}'",
+            "POST",
+            "groups",
+            200,
+            data=form_data,
+            files=True
+        )
+        
+        return response if success else None
+        
+    def get_all_groups(self, limit=20):
+        """Get all public groups"""
+        params = {"limit": limit}
+        
+        success, response = self.run_test(
+            "Get All Groups",
+            "GET",
+            "groups",
+            200,
+            params=params
+        )
+        
+        return response if success else []
+        
+    def join_group(self, group_id):
+        """Join a group"""
+        form_data = {
+            "user_id": (None, self.user["id"])
+        }
+        
+        success, response = self.run_test(
+            f"Join Group {group_id}",
+            "POST",
+            f"groups/{group_id}/join",
+            200,
+            data=form_data,
+            files=True
+        )
+        
+        return response if success else None
 
     def get_notifications(self):
         """Get user's notifications"""
