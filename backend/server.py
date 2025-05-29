@@ -505,12 +505,17 @@ async def get_current_global_challenge():
         return {"challenge": None, "status": "no_active_challenge"}
     
     now = datetime.utcnow()
-    promptness_expired = now > (challenge["created_at"] + timedelta(minutes=challenge["promptness_window_minutes"]))
+    
+    # Parse datetime strings
+    created_at = datetime.fromisoformat(challenge["created_at"].replace('Z', '+00:00')) if isinstance(challenge["created_at"], str) else challenge["created_at"]
+    expires_at = datetime.fromisoformat(challenge["expires_at"].replace('Z', '+00:00')) if isinstance(challenge["expires_at"], str) else challenge["expires_at"]
+    
+    promptness_expired = now > (created_at + timedelta(minutes=challenge["promptness_window_minutes"]))
     
     return {
         "challenge": GlobalChallenge(**challenge),
         "promptness_expired": promptness_expired,
-        "time_remaining": max(0, int((challenge["expires_at"] - now).total_seconds()))
+        "time_remaining": max(0, int((expires_at - now).total_seconds()))
     }
 
 @api_router.post("/global-challenges")
