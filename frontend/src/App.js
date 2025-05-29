@@ -1193,9 +1193,37 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
     setSearching(true);
     try {
       const response = await axios.get(`${API}/users/search?q=${encodeURIComponent(query)}`);
-      // Filter out current user from results
+      // Filter out current user from results and enhance with relationship status
       const results = response.data.filter(u => u.id !== user.id);
-      setSearchResults(results);
+      
+      // Add relationship status to each result
+      const enhancedResults = await Promise.all(results.map(async (result) => {
+        try {
+          // Check if user is already following this person
+          const isFollowing = following.some(f => f.id === result.id);
+          const isFollower = followers.some(f => f.id === result.id);
+          
+          return {
+            ...result,
+            is_following: isFollowing,
+            is_follower: isFollower,
+            is_mutual: isFollowing && isFollower,
+            relationship_status: isFollowing && isFollower ? 'friends' : 
+                               isFollowing ? 'following' : 
+                               isFollower ? 'follower' : 'none'
+          };
+        } catch (error) {
+          return {
+            ...result,
+            is_following: false,
+            is_follower: false,
+            is_mutual: false,
+            relationship_status: 'none'
+          };
+        }
+      }));
+      
+      setSearchResults(enhancedResults);
     } catch (error) {
       console.error('Search failed:', error);
       setSearchResults([]);
