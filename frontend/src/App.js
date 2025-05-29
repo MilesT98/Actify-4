@@ -689,24 +689,14 @@ const FeedScreen = ({ user, onNavigate }) => {
             Global
           </button>
           <button
-            onClick={() => setHomeActiveTab('friends')}
+            onClick={() => setHomeActiveTab('following')}
             className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-              homeActiveTab === 'friends'
+              homeActiveTab === 'following'
                 ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
                 : 'text-gray-600 dark:text-gray-300'
             }`}
           >
             Friends
-          </button>
-          <button
-            onClick={() => setHomeActiveTab('groups')}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-              homeActiveTab === 'groups'
-                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
-                : 'text-gray-600 dark:text-gray-300'
-            }`}
-          >
-            Groups
           </button>
         </div>
       </div>
