@@ -1511,34 +1511,69 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
                     <p className="text-gray-600 dark:text-gray-400">No users found matching "{searchQuery}"</p>
                   </div>
                 ) : (
-                  searchResults.map((result) => (
-                    <div key={result.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div 
-                            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold mr-3"
-                            style={{ backgroundColor: result.avatar_color }}
+                  searchResults.map((result) => {
+                    const getActionButton = () => {
+                      const baseClasses = "px-4 py-2 rounded-lg text-sm transition-colors";
+                      
+                      if (result.relationship_status === 'friends') {
+                        return (
+                          <button
+                            onClick={() => handleUnfollow(result.id)}
+                            className={`${baseClasses} bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400`}
                           >
-                            {result.username.charAt(0).toUpperCase()}
+                            ✓ Friends
+                          </button>
+                        );
+                      } else if (result.relationship_status === 'following') {
+                        return (
+                          <button
+                            onClick={() => handleUnfollow(result.id)}
+                            className={`${baseClasses} bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400`}
+                          >
+                            Following
+                          </button>
+                        );
+                      } else if (result.relationship_status === 'follower') {
+                        return (
+                          <button
+                            onClick={() => handleFollow(result.id)}
+                            className={`${baseClasses} bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/20 dark:text-orange-400`}
+                          >
+                            Follow Back
+                          </button>
+                        );
+                      } else {
+                        return (
+                          <button
+                            onClick={() => handleFollow(result.id)}
+                            className={`${baseClasses} bg-purple-600 text-white hover:bg-purple-700`}
+                          >
+                            Add Friend
+                          </button>
+                        );
+                      }
+                    };
+
+                    return (
+                      <div key={result.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div 
+                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold mr-3"
+                              style={{ backgroundColor: result.avatar_color }}
+                            >
+                              {result.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-900 dark:text-white">{result.full_name}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">@{result.username}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-gray-900 dark:text-white">{result.full_name}</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">@{result.username}</p>
-                          </div>
+                          {getActionButton()}
                         </div>
-                        <button
-                          onClick={() => result.is_following ? handleUnfollow(result.id) : handleFollow(result.id)}
-                          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                            result.is_following
-                              ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'
-                              : 'bg-purple-600 text-white hover:bg-purple-700'
-                          }`}
-                        >
-                          {result.is_following ? 'Following' : 'Follow'}
-                        </button>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
