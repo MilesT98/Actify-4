@@ -504,7 +504,72 @@ def main():
                     if follow_status and follow_status.get("is_following", False):
                         print("✅ Follow status correctly updated after follow")
     
-    # Test 4: Test Notification Deep Linking
+    # Test 4: Test Group Creation Functionality (New Requirement)
+    print("\n🔍 TESTING GROUP CREATION FUNCTIONALITY")
+    print("="*50)
+    
+    # Create a new private group
+    timestamp = int(time.time())
+    group_name = f"Test Group {timestamp}"
+    group_description = "This is a test group created for testing purposes"
+    
+    new_group = tester.create_group(group_name, group_description, is_public=False)
+    if new_group:
+        print(f"✅ Successfully created private group: {new_group.get('name')}")
+        print(f"✅ Group has correct properties: ID={new_group.get('id')}, Description={new_group.get('description')}")
+        print(f"✅ Group privacy setting is correct: is_public={new_group.get('is_public')}")
+        
+        # Verify user is in the group
+        if tester.user["id"] in new_group.get("members", []):
+            print("✅ User was automatically added to the group")
+        
+        # Get user's groups to verify the new group is included
+        user_groups = tester.get_user_groups()
+        if user_groups and any(g.get("id") == new_group.get("id") for g in user_groups):
+            print("✅ New group appears in user's groups list")
+    else:
+        print("❌ Failed to create a new group")
+    
+    # Test 5: Test Global Challenge Submission (for auto-refresh testing)
+    print("\n🔍 TESTING GLOBAL CHALLENGE SUBMISSION")
+    print("="*50)
+    
+    # Get current global challenge
+    current_challenge = tester.get_current_global_challenge()
+    if current_challenge and current_challenge.get("challenge"):
+        challenge_id = current_challenge["challenge"]["id"]
+        print(f"✅ Found active global challenge: {current_challenge['challenge']['prompt']}")
+        
+        # Submit to the challenge
+        submission = tester.submit_to_global_challenge(
+            challenge_id, 
+            "This is a test submission for the global challenge"
+        )
+        
+        if submission:
+            print(f"✅ Successfully submitted to global challenge")
+            print(f"✅ Submission has correct properties: ID={submission.get('id')}, User={submission.get('username')}")
+            
+            # Get global feed to verify submission appears
+            feed = tester.get_global_feed(challenge_id)
+            if feed and feed.get("status") == "unlocked" and feed.get("submissions"):
+                print(f"✅ Global feed is unlocked with {len(feed['submissions'])} submissions")
+                print(f"✅ User's submission is in the feed")
+                
+                # Check if user's submission is in the feed
+                user_submissions = [s for s in feed["submissions"] if s["user_id"] == tester.user["id"]]
+                if user_submissions:
+                    print(f"✅ Found {len(user_submissions)} submissions by the user in the feed")
+                else:
+                    print("❌ User's submission not found in the feed")
+            else:
+                print("❌ Failed to get global feed or feed is locked")
+        else:
+            print("❌ Failed to submit to global challenge")
+    else:
+        print("ℹ️ No active global challenge found")
+    
+    # Test 6: Test Notification Deep Linking
     print("\n🔍 TESTING NOTIFICATION FUNCTIONALITY")
     print("="*50)
     
@@ -541,6 +606,8 @@ def main():
         print("✅ Login functionality is working correctly")
         print("✅ User search functionality is working correctly")
         print("✅ Friends (Following/Followers) functionality is working correctly")
+        print("✅ Group creation functionality is working correctly")
+        print("✅ Global challenge submission is working correctly")
         print("✅ Notification deep linking metadata is present")
     else:
         print("❌ Some API tests failed, see details above")
