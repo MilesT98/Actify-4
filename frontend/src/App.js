@@ -621,7 +621,7 @@ const FeedScreen = ({ user }) => {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Groups</h2>
           <button 
-            onClick={() => setShowCreateGroup(true)}
+            onClick={() => setShowCreateForm(true)}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
           >
             Create Group
