@@ -235,6 +235,55 @@ def main():
         print(f"✅ Successfully authenticated as {test_username}")
         print("✅ Login response contains session_id, user object, and success message")
     
+    # Test Bug Fix 1: Group Creation & Interaction
+    print("\n🔍 TESTING BUG FIX 1: GROUP CREATION & INTERACTION")
+    print("="*50)
+    
+    # Create a new group
+    import time
+    group_name = f"Test Group Fix {int(time.time())}"
+    group_success, group_id = tester.test_create_group(group_name, "Testing the fix")
+    
+    if not group_success:
+        tester.log_result("Group Creation", False, "Failed to create group")
+    else:
+        tester.log_result("Group Creation", True, f"Successfully created group: {group_name}")
+    
+    # Get user's groups to verify the new group appears
+    groups_success, groups = tester.test_get_user_groups()
+    
+    if groups_success:
+        # Check if the newly created group is in the list
+        new_group_found = any(group.get('name') == group_name for group in groups)
+        if new_group_found:
+            tester.log_result("Group Listing", True, "Newly created group appears in user's groups list")
+        else:
+            tester.log_result("Group Listing", False, "Newly created group does not appear in user's groups list")
+    
+    # Test Bug Fix 2: Discover Button Relocation (Backend part)
+    print("\n🔍 TESTING BUG FIX 2: DISCOVER BUTTON RELOCATION (BACKEND)")
+    print("="*50)
+    
+    # Test user search functionality
+    search_success, users = tester.test_search_users("test")
+    
+    if search_success:
+        tester.log_result("User Search", True, f"User search functionality working, found {len(users)} users")
+    else:
+        tester.log_result("User Search", False, "User search functionality failed")
+    
+    # Test Bug Fix 3: Non-Functional Rotating Daily Global Challenge
+    print("\n🔍 TESTING BUG FIX 3: GLOBAL CHALLENGE")
+    print("="*50)
+    
+    # Test getting the current global challenge
+    challenge_success, challenge_data = tester.test_get_current_global_challenge()
+    
+    if challenge_success:
+        tester.log_result("Global Challenge", True, "Global challenge is active with correct prompt and timer")
+    else:
+        tester.log_result("Global Challenge", False, "Global challenge is not working correctly")
+    
     # Print summary of test results
     success = tester.print_summary()
     
