@@ -238,7 +238,7 @@ const AuthScreen = ({ onLogin, darkMode }) => {
 };
 
 // Enhanced FeedScreen with Global Challenge Integration and Groups Tab
-const FeedScreen = ({ user }) => {
+const FeedScreen = ({ user, onNavigate }) => {
   // Group-based feed state
   const [feed, setFeed] = useState([]);
   const [userGroups, setUserGroups] = useState([]);
