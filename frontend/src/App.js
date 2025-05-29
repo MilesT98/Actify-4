@@ -1555,7 +1555,7 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
           </div>
         )}
 
-        {activeTab === 'discover' && (
+        {activeTab === 'profile' && (
           <div className="space-y-4">
             {/* Discover Tab */}
             <div>
