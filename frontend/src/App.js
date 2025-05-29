@@ -741,6 +741,9 @@ const GroupsScreen = ({ user, darkMode }) => {
   const [createGroupLoading, setCreateGroupLoading] = useState(false);
   const [createGroupError, setCreateGroupError] = useState('');
   const [createGroupSuccess, setCreateGroupSuccess] = useState('');
+  const [createGroupLoading, setCreateGroupLoading] = useState(false);
+  const [createGroupError, setCreateGroupError] = useState('');
+  const [createGroupSuccess, setCreateGroupSuccess] = useState('');
 
   const loadGroups = async () => {
     try {
