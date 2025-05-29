@@ -636,7 +636,7 @@ const FeedScreen = ({ user }) => {
               Create or join private groups to share challenges with friends
             </p>
             <button 
-              onClick={() => setShowCreateGroup(true)}
+              onClick={() => setShowCreateForm(true)}
               className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700"
             >
               Create Your First Group
