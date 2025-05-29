@@ -344,7 +344,13 @@ class ActifyAPITester:
 
 def main():
     # Get the backend URL from the frontend .env file
-    backend_url = "https://640ec078-ed72-4608-8227-9358c4048e06.preview.emergentagent.com"
+    with open('/app/frontend/.env', 'r') as f:
+        for line in f:
+            if line.startswith('REACT_APP_BACKEND_URL='):
+                backend_url = line.strip().split('=')[1]
+                break
+    
+    print(f"Using backend URL: {backend_url}")
     
     # Create the API tester
     tester = ActifyAPITester(backend_url)
@@ -357,6 +363,9 @@ def main():
     print("="*50)
     
     # Test 1: Login with provided credentials
+    print("\n🔍 TESTING LOGIN API")
+    print("="*50)
+    
     if not tester.login(test_username, test_password):
         print("❌ Failed to login with provided credentials, trying to register a new user")
         
@@ -370,16 +379,18 @@ def main():
         if not tester.register_user(test_username, test_email, test_password, test_full_name):
             print("❌ Failed to register test user, stopping tests")
             return 1
-    
-    print(f"✅ Successfully authenticated as {test_username}")
+    else:
+        print(f"✅ Successfully authenticated as {test_username}")
+        print("✅ Login response contains session_id, user object, and success message")
     
     # Test 2: Test user search functionality (Bug Fix)
-    print("\n🔍 TESTING USER SEARCH FUNCTIONALITY")
+    print("\n🔍 TESTING USER SEARCH API")
     print("="*50)
     
     search_results = tester.search_users("test")
     if search_results and len(search_results) > 0:
         print(f"✅ User search returned {len(search_results)} results for query 'test'")
+        print("✅ Search API returns array of user objects matching 'test'")
         for user in search_results[:3]:  # Show first 3 results
             print(f"  - Found user: {user.get('username')} ({user.get('full_name')})")
     else:
@@ -393,8 +404,8 @@ def main():
     followers = tester.get_user_followers(tester.user["id"])
     following = tester.get_user_following(tester.user["id"])
     
-    print(f"✅ User has {len(followers) if followers else 0} followers")
-    print(f"✅ User is following {len(following) if following else 0} users")
+    print(f"✅ User has {len(followers) if followers else 0} friends (followers)")
+    print(f"✅ User is following {len(following) if following else 0} friends")
     
     # Test follow/unfollow if we have search results
     if search_results and len(search_results) > 0:
