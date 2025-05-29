@@ -107,6 +107,85 @@ class ActifyAPITester:
             200
         )
         return success
+        
+    def test_get_current_global_challenge(self):
+        """Test getting the current global challenge"""
+        success, response = self.run_test(
+            "Get Current Global Challenge",
+            "GET",
+            "global-challenges/current",
+            200
+        )
+        if success:
+            challenge = response.get('challenge', {})
+            time_remaining = response.get('time_remaining', 0)
+            
+            print(f"Challenge prompt: {challenge.get('prompt', 'No prompt')}")
+            print(f"Time remaining: {time_remaining} seconds ({time_remaining // 3600} hours, {(time_remaining % 3600) // 60} minutes)")
+            
+            # Verify the challenge prompt matches the expected one
+            expected_prompt = "💪 Show us your midday movement! Share any activity that gets you moving - could be a walk, stretch, workout, or dance! 🕺💃"
+            prompt_match = challenge.get('prompt') == expected_prompt
+            
+            # Verify time remaining is approximately 6 hours (with some margin)
+            time_match = 5 * 3600 <= time_remaining <= 7 * 3600
+            
+            return prompt_match and time_match, response
+        return False, {}
+        
+    def test_create_group(self, name, description):
+        """Test creating a new group"""
+        data = {
+            "name": name,
+            "description": description,
+            "creator_id": self.user.get('id')
+        }
+        
+        success, response = self.run_test(
+            "Create Group",
+            "POST",
+            "groups",
+            201,
+            data=data
+        )
+        
+        if success and response.get('id'):
+            print(f"Created group with ID: {response.get('id')}")
+            return True, response.get('id')
+        return False, None
+        
+    def test_get_user_groups(self):
+        """Test getting user's groups"""
+        success, response = self.run_test(
+            "Get User Groups",
+            "GET",
+            f"users/{self.user.get('id')}/groups",
+            200
+        )
+        
+        if success:
+            print(f"User has {len(response)} groups")
+            for group in response:
+                print(f"  - {group.get('name')}: {group.get('description')}")
+            return True, response
+        return False, []
+        
+    def test_search_users(self, query):
+        """Test user search functionality"""
+        success, response = self.run_test(
+            "Search Users",
+            "GET",
+            f"users/search",
+            200,
+            params={"q": query}
+        )
+        
+        if success:
+            print(f"Found {len(response)} users matching '{query}'")
+            for user in response:
+                print(f"  - {user.get('username')}")
+            return True, response
+        return False, []
 
     def print_summary(self):
         """Print a summary of test results"""
