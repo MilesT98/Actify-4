@@ -738,6 +738,9 @@ const GroupsScreen = ({ user, darkMode }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newGroup, setNewGroup] = useState({ name: '', description: '' });
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const [createGroupLoading, setCreateGroupLoading] = useState(false);
+  const [createGroupError, setCreateGroupError] = useState('');
+  const [createGroupSuccess, setCreateGroupSuccess] = useState('');
 
   const loadGroups = async () => {
     try {
