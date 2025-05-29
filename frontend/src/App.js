@@ -1419,16 +1419,6 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
           >
             Friends
           </button>
-          <button
-            onClick={() => setActiveTab('discover')}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'discover'
-                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
-                : 'text-gray-600 dark:text-gray-300'
-            }`}
-          >
-            Discover
-          </button>
         </div>
       </div>
 
