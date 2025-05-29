@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
-const API = 'http://localhost:8001/api';
+const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const CameraCapture = ({ onCapture, onClose, darkMode }) => {
   const [stream, setStream] = useState(null);
