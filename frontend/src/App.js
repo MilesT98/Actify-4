@@ -133,6 +133,8 @@ const AuthScreen = ({ onLogin, darkMode }) => {
       }
     } catch (error) {
       console.error('Auth error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error data:', error.response?.data);
       setError(error.response?.data?.detail || error.response?.data?.message || 'Authentication failed');
     } finally {
       setLoading(false);
