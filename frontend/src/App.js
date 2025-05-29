@@ -731,6 +731,12 @@ const GroupsScreen = ({ user, darkMode }) => {
   const [createGroupLoading, setCreateGroupLoading] = useState(false);
   const [createGroupError, setCreateGroupError] = useState('');
   const [createGroupSuccess, setCreateGroupSuccess] = useState('');
+  
+  // Add discover functionality to Groups section
+  const [showDiscoverModal, setShowDiscoverModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
 
   const loadGroups = async () => {
     try {
