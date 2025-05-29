@@ -1401,14 +1401,28 @@ const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
 
         {activeTab === 'following' && (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Friends ({followers.length})</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Friends ({followers.length})</h2>
+              <button
+                onClick={() => setActiveTab('discover')}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
+              >
+                Add Friends
+              </button>
+            </div>
             {followers.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-6xl mb-4">👥</div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No friends yet</h3>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
                   Connect with people to see their activities and challenges
                 </p>
+                <button
+                  onClick={() => setActiveTab('discover')}
+                  className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Find Friends
+                </button>
               </div>
             ) : (
               <div className="space-y-3">
