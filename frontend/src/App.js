@@ -796,12 +796,15 @@ const GroupsScreen = ({ user, darkMode }) => {
         setCreateGroupSuccess('Group created successfully! 🎉');
         setNewGroup({ name: '', description: '' });
         
-        // Delay closing form to show success message
+        // Immediately refresh groups list and redirect to the new group
+        await loadGroups();
+        
+        // Close form and navigate to the newly created group
         setTimeout(() => {
           setShowCreateForm(false);
           setCreateGroupSuccess('');
-          loadGroups(); // Refresh groups list
-        }, 1500);
+          setSelectedGroup(response.data); // Navigate to the new group
+        }, 1000);
       }
     } catch (error) {
       console.error('Failed to create group:', error);
