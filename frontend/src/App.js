@@ -704,7 +704,7 @@ const FeedScreen = ({ user, onNavigate }) => {
       {/* Content based on active home tab */}
       <div className="p-4">
         {homeActiveTab === 'global' && renderGlobalChallenge()}
-        {homeActiveTab === 'friends' && (
+        {homeActiveTab === 'following' && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">👥</div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Friends Feed</h3>
