@@ -621,10 +621,10 @@ const FeedScreen = ({ user }) => {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Groups</h2>
           <button 
-            onClick={() => setShowCreateForm(true)}
+            onClick={() => onNavigate('groups')}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
           >
-            Create Group
+            Manage Groups
           </button>
         </div>
         
@@ -636,7 +636,7 @@ const FeedScreen = ({ user }) => {
               Create or join private groups to share challenges with friends
             </p>
             <button 
-              onClick={() => setShowCreateForm(true)}
+              onClick={() => onNavigate('groups')}
               className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700"
             >
               Create Your First Group
