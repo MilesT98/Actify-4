@@ -853,12 +853,20 @@ const GroupsScreen = ({ user, darkMode }) => {
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">My Groups</h1>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            Create Group
-          </button>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setShowDiscoverModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Discover Friends
+            </button>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Create Group
+            </button>
+          </div>
         </div>
       </div>
 
