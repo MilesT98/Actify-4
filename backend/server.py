@@ -318,15 +318,15 @@ async def create_group(
     is_public: bool = Form(False),  # Default to private
     user_id: str = Form(...)
 ):
-    import secrets
+    import random
     import string
     
     # Generate unique invite code
-    invite_code = ''.join(secrets.choices(string.ascii_uppercase + string.digits, k=6))
+    invite_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     
     # Ensure invite code is unique
     while await db.groups.find_one({"invite_code": invite_code}):
-        invite_code = ''.join(secrets.choices(string.ascii_uppercase + string.digits, k=6))
+        invite_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     
     group_doc = {
         "id": str(uuid.uuid4()),
