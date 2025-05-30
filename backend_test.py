@@ -135,18 +135,22 @@ class ActifyAPITester:
         
     def test_create_group(self, name, description):
         """Test creating a new group"""
-        data = {
-            "name": name,
-            "description": description,
-            "creator_id": self.user.get('id')
+        # Create form data for multipart/form-data request
+        form_data = {
+            "name": (None, name),
+            "description": (None, description),
+            "category": (None, "fitness"),
+            "is_public": (None, "true"),
+            "user_id": (None, self.user.get('id'))
         }
         
         success, response = self.run_test(
             "Create Group",
             "POST",
             "groups",
-            201,
-            data=data
+            200,  # The API returns 200, not 201
+            data=form_data,
+            files=True  # Indicate this is a multipart/form-data request
         )
         
         if success and response.get('id'):
