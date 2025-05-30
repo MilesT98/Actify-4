@@ -1220,19 +1220,30 @@ const WeeklyActivityGroupScreen = ({ group, user, onBack, darkMode }) => {
 
               {group.submission_phase_active && weeklyActivities.length < 7 && (
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="text-green-800 dark:text-green-200 font-medium">Submission Phase Active!</p>
+                      <p className="text-green-800 dark:text-green-200 font-medium">🎯 Submission Phase Active!</p>
                       <p className="text-green-600 dark:text-green-300 text-sm">
-                        Need {7 - weeklyActivities.length} more activities to start the challenge
+                        Your group needs {7 - weeklyActivities.length} more activity ideas to start the challenge
                       </p>
                     </div>
                     <button
                       onClick={() => setShowSubmitForm(true)}
                       className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                     >
-                      Submit Idea
+                      Submit Activity Idea
                     </button>
+                  </div>
+                  
+                  {/* Show submission tips */}
+                  <div className="bg-green-100 dark:bg-green-800/20 rounded-lg p-3 mt-3">
+                    <p className="text-green-700 dark:text-green-300 text-sm font-medium mb-2">💡 Submission Tips:</p>
+                    <ul className="text-green-600 dark:text-green-400 text-xs space-y-1">
+                      <li>• Any member can submit activities (flexible distribution)</li>
+                      <li>• Ideas should be achievable by all group members</li>
+                      <li>• Once 7 activities are submitted, daily reveals begin!</li>
+                      <li>• Examples: "20 push-ups", "10-minute walk", "yoga session"</li>
+                    </ul>
                   </div>
                 </div>
               )}
