@@ -88,17 +88,70 @@ class GroupCreate(BaseModel):
     category: str = "fitness"
     is_public: bool = True
 
+# Enhanced Group Models for Weekly Activity Challenge System
 class GroupResponse(BaseModel):
     id: str
     name: str
     description: str
-    category: str
-    is_public: bool
+    category: str = "fitness"
+    is_public: bool = False
     created_by: str
     created_at: datetime
-    members: List[str] = []
-    member_count: int = 0
-    current_challenge: Optional[str] = None
+    members: List[str]
+    member_count: int
+    max_members: int = 7  # Limit to 7 members
+    admin_id: str  # Group admin (initially creator)
+    invite_code: str  # Unique invite code for joining
+    current_challenge: str = "Weekly Activity Challenge"
+    
+    # Weekly submission system
+    submission_day: Optional[str] = None  # Day of week chosen by admin
+    current_week_start: Optional[datetime] = None
+    activities_submitted_this_week: int = 0
+    activities_needed: int = 7  # Always need 7 total activities
+    submission_phase_active: bool = False
+    
+    # Daily reveal system
+    daily_reveals: List[dict] = []  # Track daily revealed activities
+    current_day_activity: Optional[dict] = None
+    
+    # Points and ranking
+    weekly_rankings: List[dict] = []
+    current_week_points: dict = {}  # member_id: points
+
+class WeeklyActivitySubmission(BaseModel):
+    id: str
+    group_id: str
+    submitted_by: str
+    activity_title: str
+    activity_description: str
+    week_start: datetime
+    submission_order: int  # 1-7, order submitted this week
+    created_at: datetime
+    is_revealed: bool = False
+    reveal_date: Optional[datetime] = None
+
+class DailyActivityCompletion(BaseModel):
+    id: str
+    group_id: str
+    activity_submission_id: str  # Links to the revealed activity
+    completed_by: str
+    completion_proof_url: str  # Photo/video proof
+    completion_description: str
+    completed_at: datetime
+    day_of_week: int  # 1-7, which day of the weekly cycle
+    completion_order: int  # 1st, 2nd, 3rd to complete this activity
+    points_earned: int  # 3, 2, 1, or 0
+
+class WeeklyRanking(BaseModel):
+    id: str
+    group_id: str
+    member_id: str
+    week_start: datetime
+    total_points: int
+    activities_completed: int
+    rank_position: int  # 1st, 2nd, 3rd, etc.
+    created_at: datetime
 
 class JoinGroupRequest(BaseModel):
     group_id: str
