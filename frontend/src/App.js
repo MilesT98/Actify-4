@@ -978,7 +978,8 @@ const WeeklyActivityGroupScreen = ({ group, user, onBack, darkMode }) => {
       
       if (response.data.success) {
         alert('Weekly submission phase started! 🎉');
-        await loadGroupData();
+        // Reload the group data to reflect the updated submission_phase_active status
+        window.location.reload(); // Force a reload to get updated group data
       }
     } catch (error) {
       console.error('Failed to start submissions:', error);
