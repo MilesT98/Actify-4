@@ -313,32 +313,58 @@ async def get_user(user_id: str):
 @api_router.post("/groups", response_model=GroupResponse)
 async def create_group(
     name: str = Form(...),
-    description: str = Form(...),
-    category: str = Form(...),
-    is_public: str = Form(...),
+    description: str = Form(""),
+    category: str = Form("fitness"),
+    is_public: bool = Form(False),  # Default to private
     user_id: str = Form(...)
 ):
-    group_id = str(uuid.uuid4())
-    is_public_bool = is_public.lower() == 'true'
+    import secrets
+    import string
+    
+    # Generate unique invite code
+    invite_code = ''.join(secrets.choices(string.ascii_uppercase + string.digits, k=6))
+    
+    # Ensure invite code is unique
+    while await db.groups.find_one({"invite_code": invite_code}):
+        invite_code = ''.join(secrets.choices(string.ascii_uppercase + string.digits, k=6))
+    
     group_doc = {
-        "id": group_id,
+        "id": str(uuid.uuid4()),
         "name": name,
         "description": description,
         "category": category,
-        "is_public": is_public_bool,
+        "is_public": is_public,
         "created_by": user_id,
+        "admin_id": user_id,  # Creator is initial admin
+        "invite_code": invite_code,
         "created_at": datetime.utcnow(),
-        "members": [user_id],
+        "members": [user_id],  # Creator is first member
         "member_count": 1,
-        "current_challenge": "Daily Steps Challenge"
+        "max_members": 7,
+        "current_challenge": "Weekly Activity Challenge",
+        
+        # Weekly submission system
+        "submission_day": None,
+        "current_week_start": None,
+        "activities_submitted_this_week": 0,
+        "activities_needed": 7,
+        "submission_phase_active": False,
+        
+        # Daily reveal system
+        "daily_reveals": [],
+        "current_day_activity": None,
+        
+        # Points and ranking
+        "weekly_rankings": [],
+        "current_week_points": {user_id: 0}
     }
     
-    await db.groups.insert_one(group_doc)
+    result = await db.groups.insert_one(group_doc)
     
     # Add group to user's groups
     await db.users.update_one(
         {"id": user_id},
-        {"$push": {"groups": group_id}, "$inc": {"stats.total_groups_joined": 1}}
+        {"$push": {"groups": group_doc["id"]}, "$inc": {"stats.total_groups_joined": 1}}
     )
     
     return GroupResponse(**group_doc)
