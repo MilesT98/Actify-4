@@ -380,6 +380,262 @@ async def get_user_groups(user_id: str):
     groups = await db.groups.find({"members": user_id}).to_list(length=None)
     return [GroupResponse(**group) for group in groups]
 
+# Weekly Activity Challenge System Endpoints
+
+@api_router.post("/groups/{group_id}/join-by-code")
+async def join_group_by_invite_code(
+    group_id: str,
+    invite_code: str = Form(...),
+    user_id: str = Form(...)
+):
+    """Join a group using invite code"""
+    group = await db.groups.find_one({"id": group_id, "invite_code": invite_code})
+    if not group:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    
+    if len(group["members"]) >= group.get("max_members", 7):
+        raise HTTPException(status_code=400, detail="Group is full (max 7 members)")
+    
+    if user_id in group["members"]:
+        raise HTTPException(status_code=400, detail="User already in group")
+    
+    # Add user to group
+    await db.groups.update_one(
+        {"id": group_id},
+        {
+            "$push": {"members": user_id},
+            "$inc": {"member_count": 1},
+            f"$set": {f"current_week_points.{user_id}": 0}
+        }
+    )
+    
+    return {"success": True, "message": "Successfully joined group"}
+
+@api_router.post("/groups/{group_id}/set-submission-day")
+async def set_submission_day(
+    group_id: str,
+    submission_day: str = Form(...),  # e.g., "Monday", "Tuesday", etc.
+    admin_id: str = Form(...)
+):
+    """Admin sets the weekly submission day"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    if group["admin_id"] != admin_id:
+        raise HTTPException(status_code=403, detail="Only group admin can set submission day")
+    
+    await db.groups.update_one(
+        {"id": group_id},
+        {"$set": {"submission_day": submission_day}}
+    )
+    
+    return {"success": True, "message": f"Submission day set to {submission_day}"}
+
+@api_router.post("/groups/{group_id}/start-weekly-submissions")
+async def start_weekly_submissions(
+    group_id: str,
+    admin_id: str = Form(...)
+):
+    """Admin starts the weekly submission phase"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    if group["admin_id"] != admin_id:
+        raise HTTPException(status_code=403, detail="Only group admin can start submissions")
+    
+    # Start new week
+    week_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    await db.groups.update_one(
+        {"id": group_id},
+        {
+            "$set": {
+                "submission_phase_active": True,
+                "current_week_start": week_start,
+                "activities_submitted_this_week": 0
+            }
+        }
+    )
+    
+    return {"success": True, "message": "Weekly submission phase started"}
+
+@api_router.post("/groups/{group_id}/submit-activity")
+async def submit_weekly_activity(
+    group_id: str,
+    activity_title: str = Form(...),
+    activity_description: str = Form(...),
+    user_id: str = Form(...)
+):
+    """Submit an activity idea for the weekly challenge"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    if not group.get("submission_phase_active", False):
+        raise HTTPException(status_code=400, detail="Submission phase not active")
+    
+    if group.get("activities_submitted_this_week", 0) >= 7:
+        raise HTTPException(status_code=400, detail="All 7 activities already submitted")
+    
+    if user_id not in group["members"]:
+        raise HTTPException(status_code=403, detail="User not in group")
+    
+    # Create activity submission
+    submission_doc = {
+        "id": str(uuid.uuid4()),
+        "group_id": group_id,
+        "submitted_by": user_id,
+        "activity_title": activity_title,
+        "activity_description": activity_description,
+        "week_start": group["current_week_start"],
+        "submission_order": group["activities_submitted_this_week"] + 1,
+        "created_at": datetime.utcnow(),
+        "is_revealed": False,
+        "reveal_date": None
+    }
+    
+    await db.weekly_activity_submissions.insert_one(submission_doc)
+    
+    # Update group submission count
+    new_count = group["activities_submitted_this_week"] + 1
+    update_data = {"$set": {"activities_submitted_this_week": new_count}}
+    
+    # If we've reached 7 submissions, end submission phase
+    if new_count >= 7:
+        update_data["$set"]["submission_phase_active"] = False
+    
+    await db.groups.update_one({"id": group_id}, update_data)
+    
+    return {"success": True, "submission_count": new_count, "remaining": 7 - new_count}
+
+@api_router.get("/groups/{group_id}/weekly-activities")
+async def get_weekly_activities(group_id: str):
+    """Get this week's submitted activities for a group"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    if not group.get("current_week_start"):
+        return []
+    
+    activities = await db.weekly_activity_submissions.find({
+        "group_id": group_id,
+        "week_start": group["current_week_start"]
+    }).to_list(length=None)
+    
+    return activities
+
+@api_router.get("/groups/{group_id}/current-day-activity")
+async def get_current_day_activity(group_id: str):
+    """Get today's revealed activity for the group"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    return {"activity": group.get("current_day_activity")}
+
+@api_router.post("/groups/{group_id}/complete-activity")
+async def complete_daily_activity(
+    group_id: str,
+    activity_submission_id: str = Form(...),
+    completion_proof: UploadFile = File(...),
+    completion_description: str = Form(""),
+    user_id: str = Form(...)
+):
+    """Submit proof of completing today's activity"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    if user_id not in group["members"]:
+        raise HTTPException(status_code=403, detail="User not in group")
+    
+    # Check if user already completed this activity
+    existing_completion = await db.daily_activity_completions.find_one({
+        "group_id": group_id,
+        "activity_submission_id": activity_submission_id,
+        "completed_by": user_id
+    })
+    
+    if existing_completion:
+        raise HTTPException(status_code=400, detail="Activity already completed by user")
+    
+    # Count existing completions for this activity to determine points
+    completion_count = await db.daily_activity_completions.count_documents({
+        "group_id": group_id,
+        "activity_submission_id": activity_submission_id
+    })
+    
+    # Determine points (3 for 1st, 2 for 2nd, 1 for 3rd, 0 for rest)
+    points_map = {0: 3, 1: 2, 2: 1}
+    points_earned = points_map.get(completion_count, 0)
+    completion_order = completion_count + 1
+    
+    # Save proof image (in production, save to cloud storage)
+    proof_url = f"data:image/jpeg;base64,{completion_proof.file.read().hex()}"
+    
+    # Create completion record
+    completion_doc = {
+        "id": str(uuid.uuid4()),
+        "group_id": group_id,
+        "activity_submission_id": activity_submission_id,
+        "completed_by": user_id,
+        "completion_proof_url": proof_url,
+        "completion_description": completion_description,
+        "completed_at": datetime.utcnow(),
+        "day_of_week": completion_count + 1,  # Simplified
+        "completion_order": completion_order,
+        "points_earned": points_earned
+    }
+    
+    await db.daily_activity_completions.insert_one(completion_doc)
+    
+    # Update user's weekly points
+    await db.groups.update_one(
+        {"id": group_id},
+        {"$inc": {f"current_week_points.{user_id}": points_earned}}
+    )
+    
+    return {
+        "success": True,
+        "points_earned": points_earned,
+        "completion_order": completion_order,
+        "message": f"Activity completed! Earned {points_earned} points"
+    }
+
+@api_router.get("/groups/{group_id}/weekly-rankings")
+async def get_weekly_rankings(group_id: str):
+    """Get current week's rankings for the group"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Get user details for the rankings
+    member_rankings = []
+    current_points = group.get("current_week_points", {})
+    
+    for member_id, points in current_points.items():
+        user = await db.users.find_one({"id": member_id})
+        if user:
+            member_rankings.append({
+                "user_id": member_id,
+                "username": user["username"],
+                "full_name": user["full_name"],
+                "avatar_color": user["avatar_color"],
+                "points": points
+            })
+    
+    # Sort by points (descending)
+    member_rankings.sort(key=lambda x: x["points"], reverse=True)
+    
+    # Add rank positions
+    for i, ranking in enumerate(member_rankings):
+        ranking["rank"] = i + 1
+    
+    return {"rankings": member_rankings}
+
 @api_router.get("/groups/{group_id}", response_model=GroupResponse)
 async def get_group(group_id: str):
     group = await db.groups.find_one({"id": group_id})
