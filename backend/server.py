@@ -636,6 +636,73 @@ async def get_weekly_rankings(group_id: str):
     
     return {"rankings": member_rankings}
 
+@api_router.post("/groups/{group_id}/reveal-daily-activity")
+async def reveal_daily_activity(
+    group_id: str,
+    admin_id: str = Form(...),
+    day_number: int = Form(...)  # 1-7, which day of the week
+):
+    """Admin triggers daily activity reveal (or automated system)"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Check if we have enough activities to reveal
+    activities = await db.weekly_activity_submissions.find({
+        "group_id": group_id,
+        "week_start": group["current_week_start"]
+    }).to_list(length=None)
+    
+    if len(activities) < 7:
+        raise HTTPException(status_code=400, detail="Not enough activities submitted yet")
+    
+    # Check if activity for this day already revealed
+    revealed_today = any(r.get("day_number") == day_number for r in group.get("daily_reveals", []))
+    if revealed_today:
+        return {"message": "Activity already revealed for this day"}
+    
+    # Randomly select an activity that hasn't been revealed yet
+    revealed_activity_ids = [r.get("activity_id") for r in group.get("daily_reveals", [])]
+    available_activities = [a for a in activities if a["id"] not in revealed_activity_ids]
+    
+    if not available_activities:
+        raise HTTPException(status_code=400, detail="All activities already revealed")
+    
+    import random
+    selected_activity = random.choice(available_activities)
+    
+    # Mark activity as revealed and update group
+    reveal_data = {
+        "day_number": day_number,
+        "activity_id": selected_activity["id"],
+        "activity_title": selected_activity["activity_title"], 
+        "activity_description": selected_activity["activity_description"],
+        "revealed_at": datetime.utcnow(),
+        "submitted_by": selected_activity["submitted_by"]
+    }
+    
+    # Update group with daily reveal and current day activity
+    await db.groups.update_one(
+        {"id": group_id},
+        {
+            "$push": {"daily_reveals": reveal_data},
+            "$set": {"current_day_activity": reveal_data}
+        }
+    )
+    
+    # Mark the activity submission as revealed
+    await db.weekly_activity_submissions.update_one(
+        {"id": selected_activity["id"]},
+        {"$set": {"is_revealed": True, "reveal_date": datetime.utcnow()}}
+    )
+    
+    return {
+        "success": True,
+        "revealed_activity": reveal_data,
+        "day_number": day_number,
+        "message": f"Day {day_number} activity revealed: {selected_activity['activity_title']}"
+    }
+
 @api_router.get("/groups/{group_id}", response_model=GroupResponse)
 async def get_group(group_id: str):
     group = await db.groups.find_one({"id": group_id})
