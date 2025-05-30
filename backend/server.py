@@ -295,6 +295,12 @@ async def get_groups(limit: int = 20):
     groups = await db.groups.find({"is_public": True}).limit(limit).to_list(length=None)
     return [GroupResponse(**group) for group in groups]
 
+@api_router.get("/users/{user_id}/groups", response_model=List[GroupResponse])
+async def get_user_groups(user_id: str):
+    """Get all groups where the user is a member"""
+    groups = await db.groups.find({"members": user_id}).to_list(length=None)
+    return [GroupResponse(**group) for group in groups]
+
 @api_router.get("/groups/{group_id}", response_model=GroupResponse)
 async def get_group(group_id: str):
     group = await db.groups.find_one({"id": group_id})
