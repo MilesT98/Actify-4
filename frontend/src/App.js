@@ -237,38 +237,19 @@ const AuthScreen = ({ onLogin, darkMode }) => {
   );
 };
 
-// Enhanced FeedScreen with Global Challenge Integration and Groups Tab
-const FeedScreen = ({ user, onNavigate }) => {
-  // Group-based feed state
-  const [feed, setFeed] = useState([]);
-  const [userGroups, setUserGroups] = useState([]);
-  
-  // Global challenge state  
+// Enhanced FeedScreen with Global Challenge Integration
+const FeedScreen = ({ user }) => {
   const [currentGlobalChallenge, setCurrentGlobalChallenge] = useState(null);
   const [globalFeedData, setGlobalFeedData] = useState(null);
   const [globalSubmissions, setGlobalSubmissions] = useState([]);
   const [userVotes, setUserVotes] = useState(new Set());
   const [sortOrder, setSortOrder] = useState('recent');
-  
-  // UI state
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [commentingOn, setCommentingOn] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [submissionComments, setSubmissionComments] = useState({});
-  
-  // NEW: Home tab navigation state (Global, Friends, Groups)
   const [homeActiveTab, setHomeActiveTab] = useState('global');
-
-  // Group management functions
-  const loadUserGroups = async () => {
-    try {
-      const response = await axios.get(`${API}/users/${user.id}/groups`);
-      setUserGroups(response.data || []);
-    } catch (error) {
-      console.error('Failed to load groups:', error);
-    }
-  };
 
   const loadGlobalChallenge = async () => {
     try {
@@ -288,7 +269,6 @@ const FeedScreen = ({ user, onNavigate }) => {
       if (response.data.status === 'unlocked' && response.data.submissions) {
         setGlobalSubmissions(response.data.submissions);
         
-        // Load user's votes
         const votesResponse = await axios.get(`${API}/users/${user.id}/votes`);
         setUserVotes(new Set(votesResponse.data.global_submission_ids || []));
       }
@@ -299,22 +279,9 @@ const FeedScreen = ({ user, onNavigate }) => {
     }
   };
 
-  const loadComments = async (submissionId) => {
-    try {
-      const response = await axios.get(`${API}/global-submissions/${submissionId}/comments`);
-      setSubmissionComments(prev => ({
-        ...prev,
-        [submissionId]: response.data
-      }));
-    } catch (error) {
-      console.error('Failed to load comments:', error);
-    }
-  };
-
   useEffect(() => {
     if (user?.id) {
       Promise.all([
-        loadUserGroups(),
         loadGlobalChallenge(),
         loadGlobalFeed()
       ]).finally(() => setLoading(false));
@@ -323,7 +290,6 @@ const FeedScreen = ({ user, onNavigate }) => {
 
   const handleVote = async (submissionId, voteType) => {
     try {
-      // Optimistic update
       setUserVotes(prev => {
         const newVotes = new Set(prev);
         if (newVotes.has(submissionId)) {
@@ -334,7 +300,6 @@ const FeedScreen = ({ user, onNavigate }) => {
         return newVotes;
       });
 
-      // Update submission vote count optimistically
       setGlobalSubmissions(prev => prev.map(submission => {
         if (submission.id === submissionId) {
           const isVoted = userVotes.has(submissionId);
@@ -353,7 +318,6 @@ const FeedScreen = ({ user, onNavigate }) => {
       
     } catch (error) {
       console.error('Failed to vote:', error);
-      // Revert optimistic update on error
       setUserVotes(prev => {
         const newVotes = new Set(prev);
         if (newVotes.has(submissionId)) {
@@ -377,53 +341,6 @@ const FeedScreen = ({ user, onNavigate }) => {
     }
   };
 
-  const handleComment = async (submissionId) => {
-    if (!commentText.trim()) return;
-
-    try {
-      await axios.post(`${API}/global-submissions/${submissionId}/comment`, {
-        comment: commentText,
-        user_id: user.id
-      });
-      
-      setCommentText('');
-      setCommentingOn(null);
-      await loadComments(submissionId);
-    } catch (error) {
-      console.error('Failed to add comment:', error);
-      alert('Failed to add comment');
-    }
-  };
-
-  const toggleComments = async (submissionId) => {
-    if (submissionComments[submissionId]) {
-      setSubmissionComments(prev => {
-        const newComments = { ...prev };
-        delete newComments[submissionId];
-        return newComments;
-      });
-    } else {
-      await loadComments(submissionId);
-    }
-  };
-
-  const getSortedSubmissions = () => {
-    if (!globalSubmissions) return [];
-    
-    return [...globalSubmissions].sort((a, b) => {
-      switch (sortOrder) {
-        case 'recent':
-          return new Date(b.created_at) - new Date(a.created_at);
-        case 'popular':
-          return b.vote_count - a.vote_count;
-        case 'comments':
-          return b.comment_count - a.comment_count;
-        default:
-          return 0;
-      }
-    });
-  };
-
   const renderGlobalChallenge = () => {
     if (!currentGlobalChallenge?.challenge) {
       return renderNoChallenges();
@@ -434,7 +351,6 @@ const FeedScreen = ({ user, onNavigate }) => {
 
     return (
       <div className="space-y-4">
-        {/* Challenge Header */}
         <div className="bg-gradient-to-r from-purple-600 to-blue-500 text-white p-6 rounded-xl shadow-lg">
           <h2 className="text-xl font-bold mb-2">Today's Global Challenge</h2>
           <p className="text-lg">{currentGlobalChallenge.challenge.prompt}</p>
@@ -443,7 +359,6 @@ const FeedScreen = ({ user, onNavigate }) => {
           </div>
         </div>
 
-        {/* Lock Screen */}
         {isLocked && !hasUserSubmitted && (
           <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center shadow-lg border border-gray-200 dark:border-gray-700">
             <div className="text-6xl mb-4">🔒</div>
@@ -453,34 +368,19 @@ const FeedScreen = ({ user, onNavigate }) => {
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               Submit your activity to unlock today's global feed and see what others shared!
             </p>
-            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg mb-6">
-              <p className="text-sm text-purple-700 dark:text-purple-300">
-                📸 Capture your moment • ✍️ Share your story • 🌍 Join the global community
-              </p>
-            </div>
           </div>
         )}
 
-        {/* Global Feed */}
         {globalFeedData?.status === 'unlocked' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Global Feed ({globalSubmissions.length} submissions)
               </h3>
-              <select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
-                className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1 text-sm"
-              >
-                <option value="recent">Most Recent</option>
-                <option value="popular">Most Popular</option>
-                <option value="comments">Most Comments</option>
-              </select>
             </div>
 
             <div className="space-y-4">
-              {getSortedSubmissions().map((submission) => (
+              {globalSubmissions.map((submission) => (
                 <div key={submission.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
                   <div className="p-4">
                     <div className="flex items-center mb-3">
@@ -510,83 +410,19 @@ const FeedScreen = ({ user, onNavigate }) => {
                     
                     <p className="text-gray-700 dark:text-gray-300 mb-4">{submission.description}</p>
                     
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <button
-                          onClick={() => handleVote(submission.id, 'up')}
-                          className={`flex items-center space-x-1 ${
-                            userVotes.has(submission.id)
-                              ? 'text-red-500'
-                              : 'text-gray-500 hover:text-red-500'
-                          }`}
-                        >
-                          <span>{userVotes.has(submission.id) ? '❤️' : '🤍'}</span>
-                          <span className="text-sm">{submission.vote_count}</span>
-                        </button>
-                        
-                        <button
-                          onClick={() => toggleComments(submission.id)}
-                          className="flex items-center space-x-1 text-gray-500 hover:text-blue-500"
-                        >
-                          <span>💬</span>
-                          <span className="text-sm">{submission.comment_count}</span>
-                        </button>
-                      </div>
-                      
+                    <div className="flex items-center space-x-4">
                       <button
-                        onClick={() => setCommentingOn(commentingOn === submission.id ? null : submission.id)}
-                        className="text-purple-600 hover:text-purple-700 text-sm font-medium"
+                        onClick={() => handleVote(submission.id, 'up')}
+                        className={`flex items-center space-x-1 ${
+                          userVotes.has(submission.id)
+                            ? 'text-red-500'
+                            : 'text-gray-500 hover:text-red-500'
+                        }`}
                       >
-                        Add Comment
+                        <span>{userVotes.has(submission.id) ? '❤️' : '🤍'}</span>
+                        <span className="text-sm">{submission.vote_count}</span>
                       </button>
                     </div>
-                    
-                    {commentingOn === submission.id && (
-                      <div className="mt-3 flex space-x-2">
-                        <input
-                          type="text"
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="Write a comment..."
-                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          onKeyPress={(e) => e.key === 'Enter' && handleComment(submission.id)}
-                        />
-                        <button
-                          onClick={() => handleComment(submission.id)}
-                          className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700"
-                        >
-                          Send
-                        </button>
-                      </div>
-                    )}
-                    
-                    {submissionComments[submission.id] && (
-                      <div className="mt-3 space-y-2 bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                        {submissionComments[submission.id].map((comment) => (
-                          <div key={comment.id} className="flex space-x-2">
-                            <div 
-                              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                              style={{ backgroundColor: comment.user?.avatar_color || '#6366F1' }}
-                            >
-                              {comment.user?.username?.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm">
-                                <span className="font-semibold text-gray-900 dark:text-white">
-                                  {comment.user?.username}
-                                </span>
-                                <span className="text-gray-700 dark:text-gray-300 ml-2">
-                                  {comment.comment}
-                                </span>
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                {new Date(comment.created_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -605,62 +441,6 @@ const FeedScreen = ({ user, onNavigate }) => {
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           Join thousands worldwide in today's challenge
         </p>
-        <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/20 dark:to-blue-900/20 p-6 rounded-xl">
-          <p className="text-sm text-purple-700 dark:text-purple-300">
-            🌟 New challenges drop daily at 6 AM • Share your journey • Connect with the global fitness community
-          </p>
-        </div>
-      </div>
-    );
-  };
-
-  // NEW: Render Groups Tab Content
-  const renderGroupsTab = () => {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Groups</h2>
-          <button 
-            onClick={() => onNavigate('groups')}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
-          >
-            Manage Groups
-          </button>
-        </div>
-        
-        {userGroups.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">👥</div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Groups Yet</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Create or join private groups to share challenges with friends
-            </p>
-            <button 
-              onClick={() => onNavigate('groups')}
-              className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700"
-            >
-              Create Your First Group
-            </button>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {userGroups.map((group) => (
-              <div key={group.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{group.name}</h3>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{group.member_count} members</span>
-                </div>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">{group.description}</p>
-                <button 
-                  onClick={() => setSelectedGroup(group)}
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm"
-                >
-                  View Group
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     );
   };
@@ -675,7 +455,6 @@ const FeedScreen = ({ user, onNavigate }) => {
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* NEW: Home Tab Navigation (Global, Friends, Groups) */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
         <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
           <button
@@ -689,22 +468,31 @@ const FeedScreen = ({ user, onNavigate }) => {
             Global
           </button>
           <button
-            onClick={() => setHomeActiveTab('following')}
+            onClick={() => setHomeActiveTab('friends')}
             className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-              homeActiveTab === 'following'
+              homeActiveTab === 'friends'
                 ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
                 : 'text-gray-600 dark:text-gray-300'
             }`}
           >
             Friends
           </button>
+          <button
+            onClick={() => setHomeActiveTab('groups')}
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+              homeActiveTab === 'groups'
+                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
+                : 'text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            Groups
+          </button>
         </div>
       </div>
 
-      {/* Content based on active home tab */}
       <div className="p-4">
         {homeActiveTab === 'global' && renderGlobalChallenge()}
-        {homeActiveTab === 'following' && (
+        {homeActiveTab === 'friends' && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">👥</div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Friends Feed</h3>
@@ -713,15 +501,21 @@ const FeedScreen = ({ user, onNavigate }) => {
             </p>
           </div>
         )}
-        {homeActiveTab === 'groups' && renderGroupsTab()}
+        {homeActiveTab === 'groups' && (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">👥</div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Group Activities</h3>
+            <p className="text-gray-600 dark:text-gray-400">
+              View your group challenges and activities
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// Rest of the components continue with the same implementation...
-// [Continuing with other components - GroupsScreen, camera handling, etc.]
-
+// Enhanced GroupsScreen with Weekly Activity Challenge System
 const GroupsScreen = ({ user, darkMode }) => {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -732,76 +526,10 @@ const GroupsScreen = ({ user, darkMode }) => {
   const [createGroupError, setCreateGroupError] = useState('');
   const [createGroupSuccess, setCreateGroupSuccess] = useState('');
   
-  // Add discover functionality to Groups section
-  const [showDiscoverModal, setShowDiscoverModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-
-  // Friend management functions within Groups context
-  const searchUsers = async (query) => {
-    if (query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const response = await axios.get(`${API}/users/search?q=${encodeURIComponent(query)}`);
-      const results = response.data.filter(u => u.id !== user.id);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Search failed:', error);
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleFollow = async (targetUserId) => {
-    try {
-      const formData = new FormData();
-      formData.append('following_id', targetUserId);
-      formData.append('follower_id', user.id);
-
-      await axios.post(`${API}/users/${targetUserId}/follow`, formData);
-      
-      // Update search results to reflect new follow status
-      setSearchResults(prev => prev.map(u => 
-        u.id === targetUserId ? {...u, relationship_status: 'following'} : u
-      ));
-      
-    } catch (error) {
-      console.error('Failed to follow user:', error);
-    }
-  };
-
-  const handleUnfollow = async (targetUserId) => {
-    try {
-      await axios.delete(`${API}/users/${targetUserId}/unfollow`, {
-        data: { follower_id: user.id }
-      });
-      
-      // Update search results
-      setSearchResults(prev => prev.map(u => 
-        u.id === targetUserId ? {...u, relationship_status: 'none'} : u
-      ));
-      
-    } catch (error) {
-      console.error('Failed to unfollow user:', error);
-    }
-  };
-
-  // Debounced search effect
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchQuery && showDiscoverModal) {
-        searchUsers(searchQuery);
-      }
-    }, 300);
-
-    return () => clearTimeout(delayedSearch);
-  }, [searchQuery, showDiscoverModal]);
+  // Join group functionality
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [joinGroupLoading, setJoinGroupLoading] = useState(false);
 
   const loadGroups = async () => {
     try {
@@ -815,7 +543,6 @@ const GroupsScreen = ({ user, darkMode }) => {
   };
 
   const createGroup = async () => {
-    // Validation
     if (!newGroup.name.trim()) {
       setCreateGroupError('Please enter a group name');
       return;
@@ -826,16 +553,6 @@ const GroupsScreen = ({ user, darkMode }) => {
       return;
     }
 
-    if (newGroup.name.trim().length > 50) {
-      setCreateGroupError('Group name must be less than 50 characters');
-      return;
-    }
-
-    if (newGroup.description.trim().length > 200) {
-      setCreateGroupError('Description must be less than 200 characters');
-      return;
-    }
-
     setCreateGroupLoading(true);
     setCreateGroupError('');
 
@@ -843,8 +560,8 @@ const GroupsScreen = ({ user, darkMode }) => {
       const formData = new FormData();
       formData.append('name', newGroup.name.trim());
       formData.append('description', newGroup.description.trim());
-      formData.append('category', 'fitness'); // Default category
-      formData.append('is_public', 'false'); // Explicitly set as private
+      formData.append('category', 'fitness');
+      formData.append('is_public', 'false');
       formData.append('user_id', user.id);
 
       const response = await axios.post(`${API}/groups`, formData, {
@@ -853,33 +570,51 @@ const GroupsScreen = ({ user, darkMode }) => {
         }
       });
 
-      if (response.status === 201) {
-        setCreateGroupSuccess('Group created successfully! 🎉');
+      if (response.status === 200) {
+        setCreateGroupSuccess('Private group created successfully! 🎉');
         setNewGroup({ name: '', description: '' });
         
-        // Immediately refresh groups list and redirect to the new group
         await loadGroups();
         
-        // Close form and navigate to the newly created group
         setTimeout(() => {
           setShowCreateForm(false);
           setCreateGroupSuccess('');
-          setSelectedGroup(response.data); // Navigate to the new group
+          setSelectedGroup(response.data);
         }, 1000);
       }
     } catch (error) {
       console.error('Failed to create group:', error);
-      if (error.response?.status === 409) {
-        setCreateGroupError('A group with this name already exists. Please choose a different name.');
-      } else if (error.response?.status === 400) {
-        setCreateGroupError(error.response.data?.detail || 'Invalid group data. Please check your inputs.');
-      } else if (error.response?.status >= 500) {
-        setCreateGroupError('Server error. Please try again later.');
-      } else {
-        setCreateGroupError('Failed to create group. Please check your connection and try again.');
-      }
+      setCreateGroupError('Failed to create group. Please try again.');
     } finally {
       setCreateGroupLoading(false);
+    }
+  };
+
+  const joinGroupByCode = async () => {
+    if (!inviteCode.trim()) {
+      alert('Please enter an invite code');
+      return;
+    }
+
+    setJoinGroupLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('invite_code', inviteCode.trim().toUpperCase());
+      formData.append('user_id', user.id);
+
+      const response = await axios.post(`${API}/groups/join-by-code`, formData);
+      
+      if (response.data.success) {
+        alert('Successfully joined group! 🎉');
+        setInviteCode('');
+        setShowJoinForm(false);
+        await loadGroups();
+      }
+    } catch (error) {
+      console.error('Failed to join group:', error);
+      alert(error.response?.data?.detail || 'Failed to join group');
+    } finally {
+      setJoinGroupLoading(false);
     }
   };
 
@@ -897,7 +632,7 @@ const GroupsScreen = ({ user, darkMode }) => {
 
   if (selectedGroup) {
     return (
-      <GroupDetailScreen 
+      <WeeklyActivityGroupScreen 
         group={selectedGroup} 
         user={user} 
         onBack={() => setSelectedGroup(null)}
@@ -908,20 +643,19 @@ const GroupsScreen = ({ user, darkMode }) => {
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">My Groups</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Weekly Challenge Groups</h1>
           <div className="flex space-x-3">
             <button
-              onClick={() => setShowDiscoverModal(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => setShowJoinForm(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
             >
-              Discover Friends
+              Join Group
             </button>
             <button
               onClick={() => setShowCreateForm(true)}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
             >
               Create Group
             </button>
@@ -929,249 +663,45 @@ const GroupsScreen = ({ user, darkMode }) => {
         </div>
       </div>
 
-      {/* Discover Friends Modal */}
-      {showDiscoverModal && (
+      {/* Join Group Modal */}
+      {showJoinForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Discover Friends</h2>
-              <button
-                onClick={() => {
-                  setShowDiscoverModal(false);
-                  setSearchQuery('');
-                  setSearchResults([]);
-                }}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                ✕
-              </button>
-            </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Join Group</h2>
             
             <div className="space-y-4">
               <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Invite Code
+                </label>
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for friends by username..."
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white uppercase"
+                  placeholder="Enter 6-digit code"
+                  maxLength={6}
                 />
               </div>
               
-              {searching && (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                </div>
-              )}
-              
-              {!searching && searchQuery.length >= 2 && (
-                <div className="space-y-3">
-                  {searchResults.length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="text-4xl mb-2">🔍</div>
-                      <p className="text-gray-600 dark:text-gray-400">No users found matching "{searchQuery}"</p>
-                    </div>
-                  ) : (
-                    searchResults.map((result) => {
-                      const getActionButton = () => {
-                        const baseClasses = "px-4 py-2 rounded-lg text-sm transition-colors";
-                        
-                        if (result.relationship_status === 'friends') {
-                          return (
-                            <button
-                              onClick={() => handleUnfollow(result.id)}
-                              className={`${baseClasses} bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400`}
-                            >
-                              ✓ Friends
-                            </button>
-                          );
-                        } else if (result.relationship_status === 'following') {
-                          return (
-                            <button
-                              onClick={() => handleUnfollow(result.id)}
-                              className={`${baseClasses} bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400`}
-                            >
-                              Following
-                            </button>
-                          );
-                        } else if (result.relationship_status === 'follower') {
-                          return (
-                            <button
-                              onClick={() => handleFollow(result.id)}
-                              className={`${baseClasses} bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/20 dark:text-orange-400`}
-                            >
-                              Follow Back
-                            </button>
-                          );
-                        } else {
-                          return (
-                            <button
-                              onClick={() => handleFollow(result.id)}
-                              className={`${baseClasses} bg-purple-600 text-white hover:bg-purple-700`}
-                            >
-                              Add Friend
-                            </button>
-                          );
-                        }
-                      };
-
-                      return (
-                        <div key={result.id} className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <div 
-                                className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold mr-3"
-                                style={{ backgroundColor: result.avatar_color }}
-                              >
-                                {result.username.charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-gray-900 dark:text-white">{result.full_name}</p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">@{result.username}</p>
-                              </div>
-                            </div>
-                            {getActionButton()}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-              
-              {searchQuery.length < 2 && (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">🔍</div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Find Friends to Group With</h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Search for users to connect and invite to your groups for shared fitness challenges
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Discover Friends Modal */}
-      {showDiscoverModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Discover Friends</h2>
-              <button
-                onClick={() => {
-                  setShowDiscoverModal(false);
-                  setSearchQuery('');
-                  setSearchResults([]);
-                }}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for friends by username..."
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowJoinForm(false);
+                    setInviteCode('');
+                  }}
+                  className="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={joinGroupByCode}
+                  disabled={joinGroupLoading}
+                  className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                >
+                  {joinGroupLoading ? 'Joining...' : 'Join Group'}
+                </button>
               </div>
-              
-              {searching && (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                </div>
-              )}
-              
-              {!searching && searchQuery.length >= 2 && (
-                <div className="space-y-3">
-                  {searchResults.length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="text-4xl mb-2">🔍</div>
-                      <p className="text-gray-600 dark:text-gray-400">No users found matching "{searchQuery}"</p>
-                    </div>
-                  ) : (
-                    searchResults.map((result) => {
-                      const getActionButton = () => {
-                        const baseClasses = "px-4 py-2 rounded-lg text-sm transition-colors";
-                        
-                        if (result.relationship_status === 'friends') {
-                          return (
-                            <button
-                              onClick={() => handleUnfollow(result.id)}
-                              className={`${baseClasses} bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400`}
-                            >
-                              ✓ Friends
-                            </button>
-                          );
-                        } else if (result.relationship_status === 'following') {
-                          return (
-                            <button
-                              onClick={() => handleUnfollow(result.id)}
-                              className={`${baseClasses} bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400`}
-                            >
-                              Following
-                            </button>
-                          );
-                        } else if (result.relationship_status === 'follower') {
-                          return (
-                            <button
-                              onClick={() => handleFollow(result.id)}
-                              className={`${baseClasses} bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/20 dark:text-orange-400`}
-                            >
-                              Follow Back
-                            </button>
-                          );
-                        } else {
-                          return (
-                            <button
-                              onClick={() => handleFollow(result.id)}
-                              className={`${baseClasses} bg-purple-600 text-white hover:bg-purple-700`}
-                            >
-                              Add Friend
-                            </button>
-                          );
-                        }
-                      };
-
-                      return (
-                        <div key={result.id} className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <div 
-                                className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold mr-3"
-                                style={{ backgroundColor: result.avatar_color }}
-                              >
-                                {result.username.charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-gray-900 dark:text-white">{result.full_name}</p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">@{result.username}</p>
-                              </div>
-                            </div>
-                            {getActionButton()}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-              
-              {searchQuery.length < 2 && (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">🔍</div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Find Friends to Group With</h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Search for users to connect and invite to your groups for shared fitness challenges
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1181,16 +711,14 @@ const GroupsScreen = ({ user, darkMode }) => {
       {showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create New Private Group</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create Weekly Challenge Group</h2>
             
-            {/* Success Message */}
             {createGroupSuccess && (
               <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
                 {createGroupSuccess}
               </div>
             )}
 
-            {/* Error Message */}
             {createGroupError && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                 {createGroupError}
@@ -1207,16 +735,13 @@ const GroupsScreen = ({ user, darkMode }) => {
                   value={newGroup.name}
                   onChange={(e) => {
                     setNewGroup({...newGroup, name: e.target.value});
-                    setCreateGroupError(''); // Clear error on input change
+                    setCreateGroupError('');
                   }}
                   className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Enter group name (3-50 characters)"
+                  placeholder="Enter group name"
                   maxLength={50}
                   disabled={createGroupLoading}
                 />
-                <div className="text-right text-xs text-gray-500 mt-1">
-                  {newGroup.name.length}/50
-                </div>
               </div>
               
               <div>
@@ -1225,24 +750,21 @@ const GroupsScreen = ({ user, darkMode }) => {
                 </label>
                 <textarea
                   value={newGroup.description}
-                  onChange={(e) => {
-                    setNewGroup({...newGroup, description: e.target.value});
-                    setCreateGroupError('');
-                  }}
+                  onChange={(e) => setNewGroup({...newGroup, description: e.target.value})}
                   className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Describe your group (max 200 characters)"
+                  placeholder="Describe your group"
                   rows="3"
                   maxLength={200}
                   disabled={createGroupLoading}
                 />
-                <div className="text-right text-xs text-gray-500 mt-1">
-                  {newGroup.description.length}/200
-                </div>
               </div>
               
               <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
                 <p className="text-sm text-purple-700 dark:text-purple-300">
-                  🔒 This will be a private group. Only invited members can see and participate in group activities.
+                  🏆 Weekly Challenge Group: Submit 7 activities together, compete daily for points!
+                </p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                  Maximum 7 members • Private group with invite code
                 </p>
               </div>
               
@@ -1283,17 +805,26 @@ const GroupsScreen = ({ user, darkMode }) => {
       <div className="p-4">
         {groups.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">👥</div>
+            <div className="text-6xl mb-4">🏆</div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Groups Yet</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Create your first group to start private challenges with friends
+              Create or join a weekly challenge group to compete with friends!
             </p>
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              Create Your First Group
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Create Your First Group
+              </button>
+              <div className="text-sm text-gray-500">or</div>
+              <button
+                onClick={() => setShowJoinForm(true)}
+                className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Join with Invite Code
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -1301,24 +832,64 @@ const GroupsScreen = ({ user, darkMode }) => {
               <div key={group.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-gray-700">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                      {group.name}
-                    </h3>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {group.name}
+                      </h3>
+                      {group.admin_id === user.id && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">ADMIN</span>
+                      )}
+                    </div>
+                    
                     {group.description && (
                       <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
                         {group.description}
                       </p>
                     )}
-                    <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                      <span>👥 {group.member_count || 1} members</span>
+                    
+                    <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-3">
+                      <span>👥 {group.member_count}/{group.max_members} members</span>
                       <span>📅 Created {new Date(group.created_at).toLocaleDateString()}</span>
                     </div>
+
+                    {/* Weekly Progress */}
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">This Week's Progress</span>
+                        <span className="text-sm text-purple-600 dark:text-purple-400">
+                          {group.activities_submitted_this_week || 0}/7 activities
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                        <div 
+                          className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${((group.activities_submitted_this_week || 0) / 7) * 100}%` }}
+                        ></div>
+                      </div>
+                      
+                      {group.submission_phase_active && (
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                          🟢 Submission phase active
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Invite Code */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 mb-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-blue-700 dark:text-blue-300">Invite Code:</span>
+                        <span className="text-sm font-mono font-bold text-blue-800 dark:text-blue-200">
+                          {group.invite_code}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                  
                   <button
                     onClick={() => setSelectedGroup(group)}
-                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm ml-4"
                   >
-                    View Group
+                    Enter Group
                   </button>
                 </div>
               </div>
@@ -1330,28 +901,115 @@ const GroupsScreen = ({ user, darkMode }) => {
   );
 };
 
-const GroupDetailScreen = ({ group, user, onBack, darkMode }) => {
-  const [members, setMembers] = useState([]);
-  const [feed, setFeed] = useState([]);
+// Weekly Activity Group Screen - Main group interface
+const WeeklyActivityGroupScreen = ({ group, user, onBack, darkMode }) => {
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [weeklyActivities, setWeeklyActivities] = useState([]);
+  const [currentDayActivity, setCurrentDayActivity] = useState(null);
+  const [rankings, setRankings] = useState([]);
+  
+  // Activity submission state
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [activityTitle, setActivityTitle] = useState('');
+  const [activityDescription, setActivityDescription] = useState('');
+  const [submitLoading, setSubmitLoading] = useState(false);
+
+  // Admin functions state
+  const [submissionDay, setSubmissionDay] = useState(group.submission_day || '');
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  const isAdmin = group.admin_id === user.id;
+
+  const loadGroupData = async () => {
+    try {
+      const [activitiesRes, currentActivityRes, rankingsRes] = await Promise.all([
+        axios.get(`${API}/groups/${group.id}/weekly-activities`),
+        axios.get(`${API}/groups/${group.id}/current-day-activity`),
+        axios.get(`${API}/groups/${group.id}/weekly-rankings`)
+      ]);
+      
+      setWeeklyActivities(activitiesRes.data || []);
+      setCurrentDayActivity(currentActivityRes.data?.activity);
+      setRankings(rankingsRes.data?.rankings || []);
+    } catch (error) {
+      console.error('Failed to load group data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitActivity = async () => {
+    if (!activityTitle.trim() || !activityDescription.trim()) {
+      alert('Please fill in both title and description');
+      return;
+    }
+
+    setSubmitLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('activity_title', activityTitle.trim());
+      formData.append('activity_description', activityDescription.trim());
+      formData.append('user_id', user.id);
+
+      const response = await axios.post(`${API}/groups/${group.id}/submit-activity`, formData);
+      
+      if (response.data.success) {
+        alert(`Activity submitted! ${response.data.remaining} more needed.`);
+        setActivityTitle('');
+        setActivityDescription('');
+        setShowSubmitForm(false);
+        await loadGroupData();
+      }
+    } catch (error) {
+      console.error('Failed to submit activity:', error);
+      alert(error.response?.data?.detail || 'Failed to submit activity');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const startWeeklySubmissions = async () => {
+    try {
+      const formData = new FormData();
+      formData.append('admin_id', user.id);
+
+      const response = await axios.post(`${API}/groups/${group.id}/start-weekly-submissions`, formData);
+      
+      if (response.data.success) {
+        alert('Weekly submission phase started! 🎉');
+        await loadGroupData();
+      }
+    } catch (error) {
+      console.error('Failed to start submissions:', error);
+      alert(error.response?.data?.detail || 'Failed to start submissions');
+    }
+  };
+
+  const setSubmissionDayAdmin = async () => {
+    if (!submissionDay) {
+      alert('Please select a submission day');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('submission_day', submissionDay);
+      formData.append('admin_id', user.id);
+
+      const response = await axios.post(`${API}/groups/${group.id}/set-submission-day`, formData);
+      
+      if (response.data.success) {
+        alert(`Submission day set to ${submissionDay}! 📅`);
+        setShowAdminPanel(false);
+      }
+    } catch (error) {
+      console.error('Failed to set submission day:', error);
+      alert(error.response?.data?.detail || 'Failed to set submission day');
+    }
+  };
 
   useEffect(() => {
-    const loadGroupData = async () => {
-      try {
-        const [membersRes, feedRes] = await Promise.all([
-          axios.get(`${API}/groups/${group.id}/members`),
-          axios.get(`${API}/groups/${group.id}/feed`)
-        ]);
-        
-        setMembers(membersRes.data || []);
-        setFeed(feedRes.data || []);
-      } catch (error) {
-        console.error('Failed to load group data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadGroupData();
   }, [group.id]);
 
@@ -1365,6 +1023,7 @@ const GroupDetailScreen = ({ group, user, onBack, darkMode }) => {
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center mb-4">
           <button
@@ -1373,57 +1032,370 @@ const GroupDetailScreen = ({ group, user, onBack, darkMode }) => {
           >
             ← Back
           </button>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{group.name}</h1>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{group.name}</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              👥 {group.member_count} members • 📊 Weekly Challenge Group
+            </p>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAdminPanel(true)}
+              className="bg-orange-600 text-white px-3 py-1 rounded text-xs hover:bg-orange-700"
+            >
+              Admin
+            </button>
+          )}
         </div>
         
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          👥 {members.length} members • 📱 {feed.length} activities
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'overview'
+                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
+                : 'text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('activities')}
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'activities'
+                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
+                : 'text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            Activities ({weeklyActivities.length}/7)
+          </button>
+          <button
+            onClick={() => setActiveTab('rankings')}
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'rankings'
+                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
+                : 'text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            Rankings
+          </button>
         </div>
       </div>
 
-      <div className="p-4">
-        {feed.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">📸</div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Activities Yet</h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              Be the first to share an activity in this group!
-            </p>
+      {/* Admin Panel Modal */}
+      {showAdminPanel && isAdmin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Admin Panel</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Weekly Submission Day
+                </label>
+                <select
+                  value={submissionDay}
+                  onChange={(e) => setSubmissionDay(e.target.value)}
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Choose day...</option>
+                  <option value="Monday">Monday</option>
+                  <option value="Tuesday">Tuesday</option>
+                  <option value="Wednesday">Wednesday</option>
+                  <option value="Thursday">Thursday</option>
+                  <option value="Friday">Friday</option>
+                  <option value="Saturday">Saturday</option>
+                  <option value="Sunday">Sunday</option>
+                </select>
+              </div>
+
+              <button
+                onClick={setSubmissionDayAdmin}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+              >
+                Set Submission Day
+              </button>
+
+              <button
+                onClick={startWeeklySubmissions}
+                className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700"
+              >
+                Start Weekly Submissions
+              </button>
+
+              <button
+                onClick={() => setShowAdminPanel(false)}
+                className="w-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+              >
+                Close
+              </button>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {feed.map((activity) => (
-              <div key={activity.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-                <div className="p-4">
-                  <div className="flex items-center mb-3">
-                    <div 
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold mr-3"
-                      style={{ backgroundColor: activity.user?.avatar_color || '#6366F1' }}
-                    >
-                      {activity.user?.username?.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white">
-                        {activity.user?.username}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {new Date(activity.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {activity.image_url && (
-                    <img 
-                      src={activity.image_url} 
-                      alt="Activity"
-                      className="w-full h-64 object-cover rounded-lg mb-3"
-                    />
-                  )}
-                  
-                  <p className="text-gray-700 dark:text-gray-300">{activity.description}</p>
+        </div>
+      )}
+
+      {/* Activity Submission Modal */}
+      {showSubmitForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Submit Activity Idea</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Activity Title *
+                </label>
+                <input
+                  type="text"
+                  value={activityTitle}
+                  onChange={(e) => setActivityTitle(e.target.value)}
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="e.g., 20 Push-ups Challenge"
+                  maxLength={100}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Description *
+                </label>
+                <textarea
+                  value={activityDescription}
+                  onChange={(e) => setActivityDescription(e.target.value)}
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Describe the activity and how to do it..."
+                  rows="4"
+                  maxLength={300}
+                />
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowSubmitForm(false);
+                    setActivityTitle('');
+                    setActivityDescription('');
+                  }}
+                  className="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitActivity}
+                  disabled={submitLoading}
+                  className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {submitLoading ? 'Submitting...' : 'Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Content */}
+      <div className="p-4">
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* Current Week Status */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">This Week's Challenge</h3>
+              
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Activity Submissions</span>
+                  <span className="text-sm text-purple-600 dark:text-purple-400">
+                    {weeklyActivities.length}/7 submitted
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
+                  <div 
+                    className="bg-purple-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${(weeklyActivities.length / 7) * 100}%` }}
+                  ></div>
                 </div>
               </div>
-            ))}
+
+              {group.submission_phase_active && weeklyActivities.length < 7 && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-green-800 dark:text-green-200 font-medium">Submission Phase Active!</p>
+                      <p className="text-green-600 dark:text-green-300 text-sm">
+                        Need {7 - weeklyActivities.length} more activities to start the challenge
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowSubmitForm(true)}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                    >
+                      Submit Idea
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!group.submission_phase_active && weeklyActivities.length === 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                  <p className="text-yellow-800 dark:text-yellow-200 font-medium">Waiting for Admin</p>
+                  <p className="text-yellow-600 dark:text-yellow-300 text-sm">
+                    The group admin needs to start the weekly submission phase
+                  </p>
+                </div>
+              )}
+
+              {weeklyActivities.length === 7 && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-blue-800 dark:text-blue-200 font-medium">Ready for Daily Challenges! 🎉</p>
+                  <p className="text-blue-600 dark:text-blue-300 text-sm">
+                    All 7 activities submitted. Daily reveals will begin soon!
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Today's Activity */}
+            {currentDayActivity && (
+              <div className="bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-lg font-bold mb-2">Today's Challenge 🏆</h3>
+                <h4 className="text-xl font-semibold mb-2">{currentDayActivity.title}</h4>
+                <p className="text-purple-100 mb-4">{currentDayActivity.description}</p>
+                <button className="bg-white text-purple-600 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100">
+                  Complete Challenge
+                </button>
+              </div>
+            )}
+
+            {/* Group Members */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Group Members ({group.member_count}/{group.max_members})
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {rankings.map((member) => (
+                  <div key={member.user_id} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div 
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
+                      style={{ backgroundColor: member.avatar_color }}
+                    >
+                      {member.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 dark:text-white">{member.full_name}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{member.points} points</p>
+                    </div>
+                    {group.admin_id === member.user_id && (
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">ADMIN</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'activities' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Weekly Activities ({weeklyActivities.length}/7)
+              </h3>
+              {group.submission_phase_active && weeklyActivities.length < 7 && (
+                <button
+                  onClick={() => setShowSubmitForm(true)}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                >
+                  Submit Activity
+                </button>
+              )}
+            </div>
+
+            {weeklyActivities.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">📝</div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Activities Yet</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Group needs to submit 7 activity ideas to start the weekly challenge
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {weeklyActivities.map((activity, index) => (
+                  <div key={activity.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-sm bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                            #{activity.submission_order}
+                          </span>
+                          <h4 className="font-semibold text-gray-900 dark:text-white">
+                            {activity.activity_title}
+                          </h4>
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">
+                          {activity.activity_description}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          Submitted {new Date(activity.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      {activity.is_revealed && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                          REVEALED
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'rankings' && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Weekly Rankings</h3>
+            
+            {rankings.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🏆</div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Rankings Yet</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Complete daily activities to earn points and climb the leaderboard!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {rankings.map((member, index) => (
+                  <div key={member.user_id} className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg ${
+                    index === 0 ? 'border-2 border-yellow-400' : 
+                    index === 1 ? 'border-2 border-gray-400' : 
+                    index === 2 ? 'border-2 border-amber-600' : ''
+                  }`}>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-2xl">
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                      </div>
+                      <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold"
+                        style={{ backgroundColor: member.avatar_color }}
+                      >
+                        {member.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900 dark:text-white">{member.full_name}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">@{member.username}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{member.points}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">points</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1431,9 +1403,7 @@ const GroupDetailScreen = ({ group, user, onBack, darkMode }) => {
   );
 };
 
-// Continue with remaining components - NotificationsScreen, ProfileScreen, etc.
-// [The rest of the file continues with existing components with minimal changes...]
-
+// Navigation Component
 const Navigation = ({ activeTab, setActiveTab, notifications, onPhotoClick, darkMode }) => {
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -1472,47 +1442,12 @@ const Navigation = ({ activeTab, setActiveTab, notifications, onPhotoClick, dark
   );
 };
 
+// Simple NotificationsScreen
 const NotificationsScreen = ({ user, notifications, setNotifications, onNavigate }) => {
-  const handleNotificationClick = async (notification) => {
-    try {
-      // Mark as read
-      await axios.patch(`${API}/notifications/${notification.id}/read`);
-      setNotifications(prev => prev.map(n => 
-        n.id === notification.id ? {...n, read: true} : n
-      ));
-
-      // Handle deep linking
-      if (notification.type === 'global_challenge_drop' || notification.type === 'global_challenge') {
-        onNavigate('feed'); // Navigate to Home screen
-      }
-    } catch (error) {
-      console.error('Failed to handle notification:', error);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      await axios.patch(`${API}/notifications/mark-all-read`, { user_id: user.id });
-      setNotifications(prev => prev.map(n => ({...n, read: true})));
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
-  };
-
   return (
     <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Notifications</h1>
-          {notifications.some(n => !n.read) && (
-            <button
-              onClick={markAllAsRead}
-              className="text-purple-600 hover:text-purple-700 text-sm font-medium"
-            >
-              Mark all read
-            </button>
-          )}
-        </div>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Notifications</h1>
       </div>
 
       <div className="p-4">
@@ -1527,32 +1462,17 @@ const NotificationsScreen = ({ user, notifications, setNotifications, onNavigate
         ) : (
           <div className="space-y-2">
             {notifications.map((notification) => (
-              <button
+              <div
                 key={notification.id}
-                onClick={() => handleNotificationClick(notification)}
-                className={`w-full text-left p-4 rounded-xl transition-colors ${
-                  notification.read
-                    ? 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                    : 'bg-purple-50 dark:bg-purple-900/20 text-gray-900 dark:text-white border-l-4 border-purple-500'
-                }`}
+                className="bg-white dark:bg-gray-800 p-4 rounded-xl"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className={`font-medium ${notification.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-white'}`}>
-                      {notification.title}
-                    </p>
-                    <p className={`text-sm mt-1 ${notification.read ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
-                      {notification.message}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-2">
-                      {new Date(notification.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  {!notification.read && (
-                    <div className="w-2 h-2 bg-purple-500 rounded-full ml-2 mt-2"></div>
-                  )}
-                </div>
-              </button>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {notification.title}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                  {notification.message}
+                </p>
+              </div>
             ))}
           </div>
         )}
@@ -1561,433 +1481,44 @@ const NotificationsScreen = ({ user, notifications, setNotifications, onNavigate
   );
 };
 
-// Profile Screen with Friends/Following Features
+// Simple ProfileScreen 
 const ProfileScreen = ({ user, onLogout, darkMode, setDarkMode }) => {
-  const [achievements, setAchievements] = useState([]);
-  const [stats, setStats] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('profile');
-  const [following, setFollowing] = useState([]);
-  const [followers, setFollowers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-
-  const loadUserData = async () => {
-    try {
-      const [achievementsRes, statsRes, followingRes, followersRes] = await Promise.all([
-        axios.get(`${API}/users/${user.id}/achievements`),
-        axios.get(`${API}/users/${user.id}/stats`),
-        axios.get(`${API}/users/${user.id}/following`),
-        axios.get(`${API}/users/${user.id}/followers`)
-      ]);
-      
-      setAchievements(achievementsRes.data || []);
-      setStats(statsRes.data || {});
-      setFollowing(followingRes.data || []);
-      setFollowers(followersRes.data || []);
-    } catch (error) {
-      console.error('Failed to load user data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const searchUsers = async (query) => {
-    if (query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const response = await axios.get(`${API}/users/search?q=${encodeURIComponent(query)}`);
-      // Filter out current user from results and enhance with relationship status
-      const results = response.data.filter(u => u.id !== user.id);
-      
-      // Add relationship status to each result
-      const enhancedResults = await Promise.all(results.map(async (result) => {
-        try {
-          // Check if user is already following this person
-          const isFollowing = following.some(f => f.id === result.id);
-          const isFollower = followers.some(f => f.id === result.id);
-          
-          return {
-            ...result,
-            is_following: isFollowing,
-            is_follower: isFollower,
-            is_mutual: isFollowing && isFollower,
-            relationship_status: isFollowing && isFollower ? 'friends' : 
-                               isFollowing ? 'following' : 
-                               isFollower ? 'follower' : 'none'
-          };
-        } catch (error) {
-          return {
-            ...result,
-            is_following: false,
-            is_follower: false,
-            is_mutual: false,
-            relationship_status: 'none'
-          };
-        }
-      }));
-      
-      setSearchResults(enhancedResults);
-    } catch (error) {
-      console.error('Search failed:', error);
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleFollow = async (targetUserId) => {
-    try {
-      const formData = new FormData();
-      formData.append('following_id', targetUserId);
-      formData.append('follower_id', user.id);
-
-      await axios.post(`${API}/users/${targetUserId}/follow`, formData);
-      
-      // Refresh following list
-      const response = await axios.get(`${API}/users/${user.id}/following`);
-      setFollowing(response.data || []);
-      
-      // Update search results to reflect new follow status
-      setSearchResults(prev => prev.map(u => 
-        u.id === targetUserId ? {...u, is_following: true} : u
-      ));
-      
-    } catch (error) {
-      console.error('Failed to follow user:', error);
-      alert('Failed to follow user');
-    }
-  };
-
-  const handleUnfollow = async (targetUserId) => {
-    try {
-      await axios.delete(`${API}/users/${targetUserId}/unfollow`, {
-        data: { follower_id: user.id }
-      });
-      
-      // Refresh following list
-      const response = await axios.get(`${API}/users/${user.id}/following`);
-      setFollowing(response.data || []);
-      
-      // Update search results
-      setSearchResults(prev => prev.map(u => 
-        u.id === targetUserId ? {...u, is_following: false} : u
-      ));
-      
-    } catch (error) {
-      console.error('Failed to unfollow user:', error);
-      alert('Failed to unfollow user');
-    }
-  };
-
-  // Debounced search
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchQuery && activeTab === 'discover') {
-        searchUsers(searchQuery);
-      }
-    }, 300);
-
-    return () => clearTimeout(delayedSearch);
-  }, [searchQuery, activeTab]);
-
-  useEffect(() => {
-    loadUserData();
-  }, [user.id]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Profile</h1>
-        
-        {/* Tab Navigation - FIXED: Removed duplicate "Friends" tab */}
-        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'profile'
-                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
-                : 'text-gray-600 dark:text-gray-300'
-            }`}
-          >
-            Profile
-          </button>
-          <button
-            onClick={() => setActiveTab('following')}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'following'
-                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400'
-                : 'text-gray-600 dark:text-gray-300'
-            }`}
-          >
-            Friends
-          </button>
-        </div>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Profile</h1>
       </div>
 
-      {/* Content */}
       <div className="p-4">
-        {activeTab === 'profile' && (
-          <div className="space-y-6">
-            {/* User Info */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-              <div className="flex items-center mb-4">
-                <div 
-                  className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold mr-4"
-                  style={{ backgroundColor: user.avatar_color }}
-                >
-                  {user.username.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">{user.full_name}</h2>
-                  <p className="text-gray-600 dark:text-gray-400">@{user.username}</p>
-                  <div className="flex items-center mt-2 space-x-4 text-sm">
-                    <div className="text-center">
-                      <div className="font-semibold text-gray-900 dark:text-white">{following.length}</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">Friends</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-semibold text-gray-900 dark:text-white">{followers.length}</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">Friends</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setDarkMode(!darkMode)}
-                  className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
-                </button>
-                <button
-                  onClick={onLogout}
-                  className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+          <div className="flex items-center mb-4">
+            <div 
+              className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold mr-4"
+              style={{ backgroundColor: user.avatar_color }}
+            >
+              {user.username.charAt(0).toUpperCase()}
             </div>
-
-            {/* Stats */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Stats</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                    {stats.total_activities || 0}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Activities</div>
-                </div>
-                <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {stats.current_streak || 0}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Day Streak</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Achievements */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Achievements</h3>
-              {achievements.length === 0 ? (
-                <p className="text-gray-600 dark:text-gray-400 text-center py-8">
-                  No achievements yet. Keep participating to earn badges! 🏆
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {achievements.map((achievement) => (
-                    <div key={achievement.id} className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-center">
-                      <div className="text-2xl mb-1">{achievement.icon}</div>
-                      <div className="text-xs font-medium text-yellow-700 dark:text-yellow-300">
-                        {achievement.name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'following' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Friends ({followers.length})</h2>
-              <button
-                onClick={() => setActiveTab('discover')}
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
-              >
-                Add Friends
-              </button>
-            </div>
-            {followers.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="text-6xl mb-4">👥</div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No friends yet</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Connect with people to see their activities and challenges
-                </p>
-                <button
-                  onClick={() => setActiveTab('discover')}
-                  className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Find Friends
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {followers.map((friend) => (
-                  <div key={friend.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div 
-                          className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold mr-3"
-                          style={{ backgroundColor: friend.avatar_color }}
-                        >
-                          {friend.username.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 dark:text-white">{friend.full_name}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">@{friend.username}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleUnfollow(friend.id)}
-                        className="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-500"
-                      >
-                        Unfollow
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'profile' && (
-          <div className="space-y-4">
-            {/* Discover Tab */}
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Discover Groups</h2>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for users..."
-                className="w-full mt-3 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{user.full_name}</h2>
+              <p className="text-gray-600 dark:text-gray-400">@{user.username}</p>
             </div>
-            
-            {searching && (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-              </div>
-            )}
-            
-            {!searching && searchQuery.length >= 2 && (
-              <div className="space-y-3">
-                {searchResults.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="text-4xl mb-2">🔍</div>
-                    <p className="text-gray-600 dark:text-gray-400">No users found matching "{searchQuery}"</p>
-                  </div>
-                ) : (
-                  searchResults.map((result) => {
-                    const getActionButton = () => {
-                      const baseClasses = "px-4 py-2 rounded-lg text-sm transition-colors";
-                      
-                      if (result.relationship_status === 'friends') {
-                        return (
-                          <button
-                            onClick={() => handleUnfollow(result.id)}
-                            className={`${baseClasses} bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400`}
-                          >
-                            ✓ Friends
-                          </button>
-                        );
-                      } else if (result.relationship_status === 'following') {
-                        return (
-                          <button
-                            onClick={() => handleUnfollow(result.id)}
-                            className={`${baseClasses} bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400`}
-                          >
-                            Following
-                          </button>
-                        );
-                      } else if (result.relationship_status === 'follower') {
-                        return (
-                          <button
-                            onClick={() => handleFollow(result.id)}
-                            className={`${baseClasses} bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/20 dark:text-orange-400`}
-                          >
-                            Follow Back
-                          </button>
-                        );
-                      } else {
-                        return (
-                          <button
-                            onClick={() => handleFollow(result.id)}
-                            className={`${baseClasses} bg-purple-600 text-white hover:bg-purple-700`}
-                          >
-                            Add Friend
-                          </button>
-                        );
-                      }
-                    };
-
-                    return (
-                      <div key={result.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div 
-                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold mr-3"
-                              style={{ backgroundColor: result.avatar_color }}
-                            >
-                              {result.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-gray-900 dark:text-white">{result.full_name}</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">@{result.username}</p>
-                            </div>
-                          </div>
-                          {getActionButton()}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-            
-            {searchQuery.length < 2 && (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">🌟</div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Discover Groups</h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Search for users to connect and start your fitness journey together
-                </p>
-              </div>
-            )}
           </div>
-        )}
+          
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+            </button>
+            <button
+              onClick={onLogout}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2001,108 +1532,9 @@ const App = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState([]);
 
-  // NEW: Group creation state
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const [showSubmissionForm, setShowSubmissionForm] = useState(false);
-
-  // Feed state for automatic refresh after photo submission
-  const [currentGlobalChallenge, setCurrentGlobalChallenge] = useState(null);
-  const [globalFeedData, setGlobalFeedData] = useState(null);
-
-  // Camera and submission handling
-  const handlePhotoCapture = (photoBlob) => {
-    setShowCamera(false);
-    
-    // Priority 1: Global challenge submission
-    if (currentGlobalChallenge?.challenge && globalFeedData?.status === 'locked') {
-      handleGlobalSubmission(photoBlob);
-      return;
-    }
-    
-    // Priority 2: Group submission
-    if (user.groups.length > 0) {
-      setShowSubmissionForm(true);
-      window.capturedPhoto = photoBlob;
-      return;
-    }
-    
-    alert('No active challenges to submit to!');
-  };
-
-  const handleGlobalSubmission = async (photoBlob) => {
-    if (!currentGlobalChallenge?.challenge) {
-      alert('No active global challenge to submit to!');
-      return;
-    }
-
-    const description = prompt('Describe your submission:');
-    if (!description) return;
-
-    try {
-      const formData = new FormData();
-      formData.append('challenge_id', currentGlobalChallenge.challenge.id);
-      formData.append('description', description);
-      formData.append('user_id', user.id);
-      formData.append('photo', photoBlob, 'global-activity.jpg');
-
-      const response = await axios.post(`${API}/global-submissions`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      if (response.status === 201) {
-        alert('Global challenge submission successful! 🎉');
-        // REQUIREMENT 1: Auto-refresh after photo submission
-        await loadGlobalFeed(); // Refresh global feed
-        await loadGlobalChallenge(); // Refresh challenge data
-        // Force UI refresh by updating state
-        setActiveTab('feed'); 
-      }
-    } catch (error) {
-      console.error('Failed to submit to global challenge:', error);
-      alert('Failed to submit to global challenge');
-    }
-  };
-
-  // Load functions for auto-refresh
-  const loadGlobalChallenge = async () => {
-    try {
-      const response = await axios.get(`${API}/global-challenges/current`);
-      setCurrentGlobalChallenge(response.data);
-    } catch (error) {
-      console.error('Failed to load global challenge:', error);
-    }
-  };
-
-  const loadGlobalFeed = async () => {
-    try {
-      const response = await axios.get(`${API}/global-feed`);
-      setGlobalFeedData(response.data);
-    } catch (error) {
-      console.error('Failed to load global feed:', error);
-    }
-  };
-
-  // Determine what content to display based on priority
-  const getDisplayPriority = () => {
-    // Priority 1: Active Global Challenge
-    if (currentGlobalChallenge?.challenge) {
-      return 'global_challenge';
-    }
-    
-    // Priority 2: User Groups Content
-    if (feed.length > 0 || user.groups.length > 0) {
-      return 'groups';
-    }
-    
-    // Priority 3: No active content
-    return 'no_challenges';
-  };
-
   // Initialize user and load data
   useEffect(() => {
     const initializeApp = async () => {
-      // Check for stored authentication
       const storedUser = localStorage.getItem('actify_user');
       const storedSession = localStorage.getItem('actify_session');
       const authTimestamp = localStorage.getItem('actify_auth_timestamp');
@@ -2112,14 +1544,9 @@ const App = () => {
           const userData = JSON.parse(storedUser);
           const sessionAge = Date.now() - parseInt(authTimestamp);
           
-          // Check if session is still valid (24 hours)
           if (sessionAge < 24 * 60 * 60 * 1000) {
-            // Validate session with backend
-            const isValid = await validateSession(storedSession);
-            if (isValid) {
-              setUser(userData);
-              console.log('Session restored for user:', userData.username);
-            }
+            setUser(userData);
+            console.log('Session restored for user:', userData.username);
           }
         } catch (error) {
           console.error('Failed to restore session:', error);
@@ -2131,38 +1558,6 @@ const App = () => {
     initializeApp();
   }, []);
 
-  // Session validation
-  const validateSession = async (sessionId) => {
-    try {
-      const response = await axios.get(`${API}/validate-session/${sessionId}`);
-      return response.status === 200;
-    } catch (error) {
-      console.error('Session validation failed:', error);
-      return false;
-    }
-  };
-
-  // Load notifications
-  useEffect(() => {
-    if (user?.id) {
-      const loadNotifications = async () => {
-        try {
-          const response = await axios.get(`${API}/notifications/${user.id}`);
-          setNotifications(response.data || []);
-        } catch (error) {
-          console.error('Failed to load notifications:', error);
-        }
-      };
-
-      loadNotifications();
-      
-      // Poll for new notifications every 30 seconds
-      const interval = setInterval(loadNotifications, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [user]);
-
-  // User authentication handlers
   const handleLogin = (newUser) => {
     setUser(newUser);
     localStorage.setItem('actify_user', JSON.stringify(newUser));
@@ -2178,7 +1573,6 @@ const App = () => {
     localStorage.removeItem('actify_auth_timestamp');
   };
 
-  // If not logged in, show auth screen
   if (!user) {
     return <AuthScreen onLogin={handleLogin} darkMode={darkMode} />;
   }
@@ -2186,7 +1580,6 @@ const App = () => {
   return (
     <div className={`${darkMode ? 'dark' : ''} bg-gray-50 dark:bg-gray-900`}>
       <div className="min-h-screen flex flex-col max-w-md mx-auto bg-white dark:bg-gray-900 shadow-lg">
-        {/* Main Content */}
         <div className="flex-1 overflow-hidden">
           {activeTab === 'feed' && <FeedScreen user={user} />}
           {activeTab === 'groups' && <GroupsScreen user={user} darkMode={darkMode} />}
@@ -2208,7 +1601,6 @@ const App = () => {
           )}
         </div>
 
-        {/* Navigation */}
         <Navigation 
           activeTab={activeTab} 
           setActiveTab={setActiveTab} 
@@ -2218,10 +1610,9 @@ const App = () => {
         />
       </div>
 
-      {/* Camera Modal */}
       {showCamera && (
         <CameraCapture 
-          onCapture={handlePhotoCapture}
+          onCapture={() => setShowCamera(false)}
           onClose={() => setShowCamera(false)}
           darkMode={darkMode}
         />
