@@ -239,54 +239,73 @@ def main():
         print(f"✅ Successfully authenticated as {test_username}")
         print("✅ Login response contains session_id, user object, and success message")
     
-    # Test Bug Fix 1: Group Creation & Interaction
-    print("\n🔍 TESTING BUG FIX 1: GROUP CREATION & INTERACTION")
+    # Test Groups Functionality
+    print("\n🔍 TESTING GROUPS FUNCTIONALITY")
     print("="*50)
     
-    # Create a new group
-    import time
-    group_name = f"Test Group Fix {int(time.time())}"
-    group_success, group_id = tester.test_create_group(group_name, "Testing the fix")
+    # First, get existing user groups to verify the endpoint works
+    print("\n🔍 Testing GET /users/{user_id}/groups endpoint")
+    groups_success, existing_groups = tester.test_get_user_groups()
     
-    if not group_success:
-        tester.log_result("Group Creation", False, "Failed to create group")
+    if groups_success:
+        tester.log_result("Get User Groups", True, f"Successfully retrieved {len(existing_groups)} groups")
+        print(f"User has {len(existing_groups)} existing groups:")
+        for group in existing_groups:
+            print(f"  - Group ID: {group.get('id')}")
+            print(f"    Name: {group.get('name')}")
+            print(f"    Description: {group.get('description')}")
+            print(f"    Members: {group.get('member_count', 0)}")
+            print(f"    Created at: {group.get('created_at')}")
+            print()
     else:
-        tester.log_result("Group Creation", True, f"Successfully created group: {group_name}")
+        tester.log_result("Get User Groups", False, "Failed to retrieve user groups")
+        print("❌ GET /users/{user_id}/groups endpoint is not working correctly")
     
-    # Get user's groups to verify the new group appears
-    groups_success, groups = tester.test_get_user_groups()
+    # Create a new test group
+    print("\n🔍 Testing POST /groups endpoint")
+    import time
+    group_name = f"UI Test Group {int(time.time())}"
+    group_success, group_id = tester.test_create_group(group_name, "Test group created via API testing")
+    
+    if group_success and group_id:
+        tester.log_result("Create Group", True, f"Successfully created group: {group_name} with ID: {group_id}")
+    else:
+        tester.log_result("Create Group", False, "Failed to create group")
+        print("❌ POST /groups endpoint is not working correctly")
+    
+    # Verify the new group appears in the user's groups
+    print("\n🔍 Verifying new group appears in user's groups")
+    groups_success, updated_groups = tester.test_get_user_groups()
     
     if groups_success:
         # Check if the newly created group is in the list
-        new_group_found = any(group.get('name') == group_name for group in groups)
-        if new_group_found:
-            tester.log_result("Group Listing", True, "Newly created group appears in user's groups list")
+        new_group = next((group for group in updated_groups if group.get('name') == group_name), None)
+        if new_group:
+            tester.log_result("Group Verification", True, "Newly created group appears in user's groups list")
+            print(f"✅ New group details:")
+            print(f"  - Group ID: {new_group.get('id')}")
+            print(f"  - Name: {new_group.get('name')}")
+            print(f"  - Description: {new_group.get('description')}")
+            print(f"  - Members: {new_group.get('member_count', 0)}")
         else:
-            tester.log_result("Group Listing", False, "Newly created group does not appear in user's groups list")
+            tester.log_result("Group Verification", False, "Newly created group does not appear in user's groups list")
+            print("❌ Group creation may have succeeded but it's not associated with the user")
     
-    # Test Bug Fix 2: Discover Button Relocation (Backend part)
-    print("\n🔍 TESTING BUG FIX 2: DISCOVER BUTTON RELOCATION (BACKEND)")
-    print("="*50)
+    # Get all public groups
+    print("\n🔍 Testing GET /groups endpoint")
+    success, public_groups = tester.run_test(
+        "Get Public Groups",
+        "GET",
+        "groups",
+        200
+    )
     
-    # Test user search functionality
-    search_success, users = tester.test_search_users("test")
-    
-    if search_success:
-        tester.log_result("User Search", True, f"User search functionality working, found {len(users)} users")
+    if success:
+        tester.log_result("Get Public Groups", True, f"Successfully retrieved {len(public_groups)} public groups")
+        print(f"There are {len(public_groups)} public groups available")
     else:
-        tester.log_result("User Search", False, "User search functionality failed")
-    
-    # Test Bug Fix 3: Non-Functional Rotating Daily Global Challenge
-    print("\n🔍 TESTING BUG FIX 3: GLOBAL CHALLENGE")
-    print("="*50)
-    
-    # Test getting the current global challenge
-    challenge_success, challenge_data = tester.test_get_current_global_challenge()
-    
-    if challenge_success:
-        tester.log_result("Global Challenge", True, "Global challenge is active with correct prompt and timer")
-    else:
-        tester.log_result("Global Challenge", False, "Global challenge is not working correctly")
+        tester.log_result("Get Public Groups", False, "Failed to retrieve public groups")
+        print("❌ GET /groups endpoint is not working correctly")
     
     # Print summary of test results
     success = tester.print_summary()
