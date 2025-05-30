@@ -1126,6 +1126,13 @@ const WeeklyActivityGroupScreen = ({ group, user, onBack, darkMode }) => {
               </button>
 
               <button
+                onClick={() => revealDailyActivity()}
+                className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700"
+              >
+                Reveal Today's Activity
+              </button>
+
+              <button
                 onClick={() => setShowAdminPanel(false)}
                 className="w-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
               >
